@@ -35,6 +35,13 @@ from typing import Any, Dict, Optional, Tuple
 import urllib.request
 import urllib.error
 
+from core.environment import detect_environment
+from core.paths import build_paths, cache_subdir
+
+
+_ENV = detect_environment()
+_PATHS = build_paths(_ENV)
+
 
 __all__ = [
     "start_icon_pack_update_async",
@@ -143,37 +150,42 @@ def _write_json_atomic(path: str, data: Dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-def _cache_root(app_dir: str) -> str:
+def _cache_root(app_dir: str) -> Optional[str]:
     """
-    Raiz gravável para cache.
-    Preferência: LOCALAPPDATA (por usuário).
-    Fallback: app_dir/package (melhor esforço).
+    Raiz gravável para cache do weather_service.
+
+    NOVA REGRA (core/paths):
+    - Se houver paths graváveis (installed ou portable), usa:
+        <writable_root>/cache/weather/
+    - Se não houver permissão de escrita (TV/pendrive bloqueado), retorna None.
     """
-    base = os.environ.get("LOCALAPPDATA")
-    if base:
-        p = os.path.join(base, "CLUBAL_Agenda_Live", "package")
-        _safe_mkdir(p)
-        return p
+    _ = app_dir  # mantido por compatibilidade de assinatura
 
-    p = os.path.join(app_dir, "package")
-    _safe_mkdir(p)
-    return p
+    p = cache_subdir(_PATHS, "weather")
+    if p is None:
+        return None
+    return str(p)
 
 
-def _cache_paths(app_dir: str) -> Tuple[str, str]:
+def _cache_paths(app_dir: str) -> Tuple[Optional[str], Optional[str]]:
     root = _cache_root(app_dir)
+    if not root:
+        return None, None
+
     current = os.path.join(root, "weather_cache.json")
     archive = os.path.join(root, CACHE_ARCHIVE_DIRNAME)
     _safe_mkdir(archive)
     return current, archive
 
 
-def _icons_dir(app_dir: str) -> str:
+def _icons_dir(app_dir: str) -> Optional[str]:
     root = _cache_root(app_dir)
+    if not root:
+        return None
+
     p = os.path.join(root, ICONS_DIRNAME)
     _safe_mkdir(p)
     return p
-
 
 def _archive_existing_cache(current_path: str, archive_dir: str, logger=None) -> None:
     try:
@@ -242,6 +254,11 @@ def _cleanup_cache_archive(archive_dir: str, logger=None) -> None:
 
 def housekeeping(app_dir: str, logger=None) -> None:
     current, archive = _cache_paths(app_dir)
+
+    # Se não há diretório gravável (TV/pendrive bloqueado), não faz housekeeping.
+    if not current or not archive:
+        return
+
     _cleanup_cache_archive(archive, logger=logger)
 
     # remove tmp velho se existir
@@ -255,12 +272,14 @@ def housekeeping(app_dir: str, logger=None) -> None:
     # Limpeza periódica de ícones antigos (evita crescimento infinito do cache de PNG).
     try:
         icons = _icons_dir(app_dir)
-        if not os.path.isdir(icons):
+        if not icons or not os.path.isdir(icons):
             return
+
         now = time.time()
         max_age = ICON_STALE_DAYS * 86400
         if max_age <= 0:
             return
+
         for name in os.listdir(icons):
             p = os.path.join(icons, name)
             if not os.path.isfile(p):
@@ -453,7 +472,12 @@ def get_official_icon_png_path(
       2) se não existir, baixa do CDN (metno/weathericons) e salva
       3) se falhar, retorna None
     """
+    
     icons_dir = _icons_dir(app_dir)
+    if not icons_dir:
+        if logger:
+            logger("[WEATHER] Icon cache disabled (no writable cache dir)")
+        return None
 
     candidates = _normalize_symbol_code_candidates(symbol_code, is_day=is_day)
     if not candidates:
@@ -592,6 +616,10 @@ def start_icon_pack_update_async(
     def _worker():
         try:
             icons_dir = _icons_dir(app_dir)
+            if not icons_dir:
+                if logger:
+                    logger("[WEATHER] Prewarm skip (icon cache disabled: no writable cache dir)")
+                return
 
             # Marca diária (evita ficar baixando sempre no boot)
             stamp_path = os.path.join(icons_dir, "_prewarm_stamp.json")
@@ -974,52 +1002,59 @@ def get_weather(
         f"?lat={use_lat:.4f}&lon={use_lon:.4f}"
     )
 
+    cache_enabled = bool(current_cache_path and archive_dir)
+
     try:
         if logger:
-            logger(f"[WEATHER] Fetch start url={url}")
+            logger(f"[WEATHER] Fetch start url={url} cache={'on' if cache_enabled else 'off'}")
 
         payload = _http_get_json(url, user_agent=user_agent, timeout=6, logger=logger)
         res = _extract_summary(payload, now_hour=now_hour, lat=use_lat, lon=use_lon)
 
-        _archive_existing_cache(current_cache_path, archive_dir, logger=logger)
-        _write_json_atomic(
-            current_cache_path,
-            {
-                "ts": res.cache_ts,
-                "payload": payload,
-                "city": (WEATHER_PLACE_CITY or city_label),
-                "uf": (WEATHER_PLACE_UF or ""),
-                "lat": use_lat,
-                "lon": use_lon,
-            },
-        )
-        _cleanup_cache_archive(archive_dir, logger=logger)
+        if cache_enabled:
+            _archive_existing_cache(current_cache_path, archive_dir, logger=logger)
+            _write_json_atomic(
+                current_cache_path,
+                {
+                    "ts": res.cache_ts,
+                    "payload": payload,
+                    "city": (WEATHER_PLACE_CITY or city_label),
+                    "uf": (WEATHER_PLACE_UF or ""),
+                    "lat": use_lat,
+                    "lon": use_lon,
+                },
+            )
+            _cleanup_cache_archive(archive_dir, logger=logger)
 
-        if logger:
-            logger(f"[WEATHER] ONLINE ok temp={res.temp_c} sym={res.symbol_code} cache_path={current_cache_path}")
+            if logger:
+                logger(f"[WEATHER] ONLINE ok temp={res.temp_c} sym={res.symbol_code} cache_path={current_cache_path}")
+        else:
+            if logger:
+                logger(f"[WEATHER] ONLINE ok temp={res.temp_c} sym={res.symbol_code} (cache disabled)")
 
         return res
 
     except Exception:
-        cached = _read_json(current_cache_path)
-        if cached and isinstance(cached.get("payload"), dict):
-            payload = cached["payload"]
+        if cache_enabled:
+            cached = _read_json(current_cache_path)
+            if cached and isinstance(cached.get("payload"), dict):
+                payload = cached["payload"]
 
-            c_lat = cached.get("lat", use_lat)
-            c_lon = cached.get("lon", use_lon)
+                c_lat = cached.get("lat", use_lat)
+                c_lon = cached.get("lon", use_lon)
 
-            res = _extract_summary(payload, now_hour=now_hour, lat=float(c_lat), lon=float(c_lon))
-            res.source = "cache"
-            res.cache_ts = cached.get("ts")
-            res.ok = True
+                res = _extract_summary(payload, now_hour=now_hour, lat=float(c_lat), lon=float(c_lon))
+                res.source = "cache"
+                res.cache_ts = cached.get("ts")
+                res.ok = True
 
-            if logger:
-                logger(f"[WEATHER] FALLBACK cache ok ts={res.cache_ts} cache_path={current_cache_path}")
+                if logger:
+                    logger(f"[WEATHER] FALLBACK cache ok ts={res.cache_ts} cache_path={current_cache_path}")
 
-            return res
+                return res
 
         if logger:
-            logger(f"[WEATHER] FAIL no cache available cache_path={current_cache_path}")
+            logger("[WEATHER] FAIL no cache available (or cache disabled)")
 
         return WeatherResult(
             ok=False,

@@ -165,11 +165,8 @@ MS_SECTION_SCROLL_SPEED_PX = 1
 MS_HOURS_ROTATE = 16000
 
 # -------------------------
-# Infra/IO (candidato a módulo: infra.py): paths, logging, selftest
+# Infra/IO consolidado em bootstrap + ctx.paths + logging local
 # -------------------------
-
-APP_DIR = str(ctx.paths.app_dir)
-DATA_DIR = str(ctx.paths.writable_root) if ctx.paths.writable_root is not None else str(ctx.paths.data_dir)
 
 GRAPHICS_DIR = str(ctx.paths.assets_dir)
 

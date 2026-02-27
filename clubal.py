@@ -26,6 +26,8 @@ from typing import List, Optional, Tuple, Dict
 import tkinter as tk
 import tkinter.font as tkfont
 
+from core.bootstrap import bootstrap
+
 # Pillow é opcional: melhora compatibilidade e redimensionamento de PNG (fallback para tk.PhotoImage).
 try:
     from PIL import Image, ImageTk  # type: ignore
@@ -4932,6 +4934,7 @@ class ClubalApp(tk.Tk):
         self.after(1000, self._tick)
 
 if __name__ == "__main__":
+    ctx = bootstrap()
     try:
         _enable_windows_dpi_awareness()  # precisa ocorrer antes do Tk criar janelas
         _selftest_geometry(logger=log)

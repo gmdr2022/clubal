@@ -1,162 +1,143 @@
-# CLUBAL — ARQUITETURA ATUAL
+# CLUBAL — Current Architecture
 
-> Documento que descreve o estado real atual do projeto.
-> Não contém futuro. Apenas como o sistema funciona hoje.
-
----
-
-## 1. Stack Atual
-
-- Linguagem: Python 3.x
-- Interface: Tkinter
-- Imagens: Pillow (fallback quando necessário)
-- Execução: Script direto (.py)
-- Empacotamento: Futuramente via PyInstaller (planejado)
-
-O sistema foi desenvolvido com foco em leveza e compatibilidade com TVs Windows e execução portátil.
+This document describes the architectural structure and runtime behavior of CLUBAL.
+It focuses on principles and structure rather than temporary implementation details.
 
 ---
 
-## 2. Estrutura Atual (Monolito em Evolução)
+## 1. Architectural Overview
 
-Estado atual do projeto:
+CLUBAL follows a centralized runtime context model.
 
-- Arquivo principal (ex: sal.py / clubal.py)
-- Lógica de agenda integrada
-- Lógica de clima integrada
-- UI construída diretamente no arquivo principal
-- Uso parcial de cache local
-- Uso opcional de Pillow para compatibilidade de PNG
+The system initializes through a bootstrap layer that:
 
-A modularização está planejada, mas ainda não totalmente implementada.
+- Detects execution environment
+- Resolves path policy
+- Determines writable capabilities
+- Establishes logging and caching behavior
+
+All infrastructure decisions derive from a runtime context.
 
 ---
 
-## 3. UI — Estrutura Geral
+## 2. Runtime Context Pattern
 
-Layout atual:
+At startup:
+
+- The application initializes a runtime context.
+- The context exposes resolved path information.
+- Modules consume context instead of resolving paths independently.
+
+This prevents path duplication and environment-specific logic from spreading across the codebase.
+
+---
+
+## 3. Environment Detection
+
+Execution modes are determined dynamically:
+
+- Installed execution
+- Portable execution
+- Restricted/no-write environment
+
+The system performs real write validation to determine writable capability.
+
+If writing is not possible:
+- Logs and cache may be disabled.
+- The application must continue safely.
+
+---
+
+## 4. Path Resolution Policy
+
+The architecture centralizes:
+
+- Application directory
+- Asset directory
+- Data directory
+- Writable root (if available)
+- Log directory (if available)
+- Cache directory (if available)
+
+No module creates directories independently.
+All path resolution flows through the centralized policy.
+
+---
+
+## 5. UI Structure
+
+CLUBAL operates within a single Tkinter root.
+
+Layout pattern:
 
 HEADER
-    - Logo
-    - Data
-    - Relógio
-    - WeatherCard
+- Logo
+- Date
+- Clock
+- Weather card
 
 BODY
-    - Duas colunas principais:
-        ESQUERDA  → AGORA
-        DIREITA   → PRÓXIMAS
+- Two primary columns:
+  - Current activities
+  - Upcoming activities
 
-Sistema de rotação:
-    - Alternância temporizada de conteúdos
-    - Uso de after() do Tkinter
-    - Reaproveitamento de frames
+Content rotation uses event scheduling (`after()`).
+No aggressive loops are allowed.
 
-Não há múltiplas janelas.
-Não há múltiplos roots.
-Tudo ocorre dentro de uma única janela principal.
+Layout is reused instead of rebuilt.
 
 ---
 
-## 4. Sistema de Agenda
+## 6. Agenda System
 
-- Fonte original: Excel (grade.xlsx)
-- Evolução planejada: JSON (agenda.json)
-- Lógica atual:
-    - Filtra aulas por dia
-    - Determina aulas em andamento (AGORA)
-    - Determina próximas aulas (PRÓXIMAS)
-    - Calcula progresso temporal
-    - Atualiza UI periodicamente
+- Data-driven
+- Local-first
+- Filters by day
+- Determines active and upcoming activities
+- Calculates temporal progress
+- Updates event-driven
 
-Agenda depende apenas de dados locais.
+Agenda must function fully offline.
 
 ---
 
-## 5. Sistema de Clima
+## 7. Weather System
 
-- API utilizada: met.no (Locationforecast)
-- Uso de:
-    - symbol_code
-    - temperatura atual
-    - previsão próxima
-- Cache local:
-    - weather_cache.json
-- Ícones:
-    - Oficiais Yr
-    - Fallback via Pillow
+- Online source when available
+- Local cache fallback
+- Icon management with image compatibility layer
+- Short timeouts
+- Graceful degradation when offline
 
-Timeout curto e fallback offline implementado.
-
-Se não houver internet:
-    - Sistema usa último cache válido
-    - Interface permanece funcional
+Weather failure must never crash the UI.
 
 ---
 
-## 6. Sistema de Rotação de Conteúdo
+## 8. Logging & IO
 
-Atualmente:
+Logging and IO follow centralized path resolution.
 
-- Alternância temporizada via after()
-- Sem reconstrução total de layout
-- Uso de pack / pack_forget
-- Sistema leve
+If no writable directory exists:
+- Logging becomes a no-op.
+- Execution continues safely.
 
-Rotação ainda não utiliza Content Engine genérico.
-Funciona de forma direta na UI principal.
+This ensures compatibility with:
 
----
-
-## 7. Política de Arquivos e Cache
-
-Estado atual:
-
-- Uso parcial de %LOCALAPPDATA%
-- Criação de cache de clima
-- Criação de logs simples
-- Estrutura portátil ainda em evolução
-
-Bootstrap e detecção formal de ambiente ainda não implementados completamente.
+- Corporate PCs
+- Restricted environments
+- Portable deployments
+- TV execution
 
 ---
 
-## 8. Pontos Técnicos Pendentes (Arquitetura)
+## 9. Current Structural Reality
 
-Ainda não implementado:
+The application remains partially centralized in a primary file.
 
-- core/bootstrap.py
-- core/paths.py centralizado
-- core/environment.py
-- Content Engine modular
-- Sistema formal de prioridade
-- Watchdog de recuperação
-- Multi-profile
+However:
 
-Esses itens fazem parte do ROADMAP_TECHNICAL.md.
+- Infrastructure is already abstracted.
+- Runtime context is centralized.
+- Path logic is no longer scattered.
 
----
-
-## 9. Princípios Arquiteturais Atuais
-
-- Uma única janela principal
-- Nenhum loop agressivo
-- Uso mínimo de threads
-- Foco em estabilidade
-- UI event-driven
-- Cache como fallback primário
-
----
-
-## 10. Limitações Atuais
-
-- Código ainda parcialmente monolítico
-- Dependência inicial de Excel
-- Modularização incompleta
-- Estrutura de paths ainda não totalmente centralizada
-- Sistema de conteúdo ainda não baseado em engine modular
-
----
-
-Este documento deve ser atualizado sempre que a arquitetura real mudar.
-Não incluir ideias futuras aqui.
+The next architectural phase focuses on controlled modularization without breaking runtime stability.

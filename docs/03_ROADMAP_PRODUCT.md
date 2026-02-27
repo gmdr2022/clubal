@@ -1,185 +1,186 @@
-# CLUBAL — ROADMAP DE PRODUTO
+# CLUBAL — Product Roadmap
 
-> Documento estratégico.
-> Define a evolução funcional e posicionamento do CLUBAL como produto.
-> Não contém detalhes de implementação técnica profunda.
-> Foco: valor, diferenciação e escalabilidade.
-
----
-
-# 1. POSICIONAMENTO
-
-CLUBAL deixa de ser apenas “agenda com clima”.
-
-Passa a ser:
-
-> Plataforma Modular de Comunicação Institucional Leve
-
-Agenda, clima e feriados são módulos.
-A estrutura é o núcleo.
-
-O produto deve ser:
-
-- Estável
-- Portátil
-- Offline-first
-- Compatível com TV
-- Comercializável
+This document defines the long-term product direction of CLUBAL.
+It focuses on value, differentiation, operational fit, and scalability.
+It avoids implementation details and should remain stable over time.
 
 ---
 
-# 2. NÚCLEO DE CONTEÚDO MODULAR
+## 1. Positioning
 
-Todos os conteúdos são tratados como módulos.
+CLUBAL is not “an agenda with weather”.
 
-Exemplos atuais:
-- Agenda do Dia
-- Índices Climáticos
-- Calendário de Feriados
+CLUBAL is a:
 
-Exemplos futuros possíveis:
-- Avisos institucionais
-- Campanhas internas
-- Eventos especiais
-- Mensagens patrocinadas
-- Comunicados urgentes
-- QR Code dinâmico
-- Ranking interno
+> Lightweight, resilient institutional communication platform
 
-Adicionar módulo não deve exigir alterar arquitetura base.
+Agenda, weather, and holidays are content modules.
+The core value is a stable delivery system for institutional information.
 
 ---
 
-# 3. SISTEMA DE PRIORIDADE
+## 2. Primary Use Cases
 
-Cada módulo pode possuir prioridade:
+CLUBAL is designed to operate reliably in environments where typical solutions fail:
 
-0 = padrão  
-1 = destaque  
-2 = urgente  
-3 = bloqueante  
+- TVs running Windows
+- low-end or aging PCs
+- restricted corporate environments
+- offline or unstable networks
+- portable/pendrive deployments
 
-Exemplo de comportamento:
+Primary display use cases:
 
-- Aviso urgente interrompe rotação.
-- Emergência ocupa tela inteira.
-- Destaque aparece com maior frequência.
-
-Isso transforma o CLUBAL em ferramenta institucional real.
-
----
-
-# 4. MODO EMERGÊNCIA
-
-Objetivo: uso institucional crítico.
-
-Ativação simples:
-- Arquivo local
-- Campo no config
-
-Comportamento:
-- Interrompe rotação
-- Pode ocupar tela principal
-- Compatível com modo offline
-
-Diferencial estratégico para escolas, clubes, instituições.
+- daily schedule of activities
+- weather indicators (optional)
+- monthly holidays/calendar highlights
+- institutional notices
+- urgent announcements
 
 ---
 
-# 5. MULTI-CLIENTE / BRANDING
+## 3. Core Product Principles
 
-Objetivo: transformar em produto vendável.
+These principles must remain true as the product evolves:
 
-Estrutura por profile:
-
-- Logo do cliente
-- Cores
-- Cidade
-- Configurações
-- Feriados locais
-
-Um único build deve atender múltiplos clientes.
-
----
-
-# 6. EXPERIÊNCIA VISUAL EVOLUTIVA
-
-Sem perder leveza:
-
-- Transições suaves
-- Ajuste automático de contraste
-- Layout proporcional (não fixo por resolução)
-- Microanimações discretas
-- Modo noturno real automático
-
-Tudo respeitando:
-- Performance
-- Portabilidade
-- TV compatibility
+- Offline-first by default
+- Portable-friendly operation
+- No dependency on constant internet
+- Minimal resource usage
+- Simple operation (TV-ready)
+- Graceful degradation (never crash)
+- Expandable via modular content
+- Commercial packaging readiness
 
 ---
 
-# 7. MODO ADMINISTRATIVO
+## 4. Modular Content Strategy
 
-Acesso oculto.
+CLUBAL treats each information type as a module.
 
-Funções mínimas:
-- Alterar configurações
-- Importar agenda
-- Limpar cache
-- Ver status do sistema
-- Ativar modo emergência
+Examples of modules:
 
-Sem complexidade.
-Sem painel web.
-Tudo local.
+- Daily Agenda
+- Weather Indicators
+- Holiday Calendar
+- Institutional Notices
+- Campaigns / Banners
+- QR Code / Link Call-to-Action
+- Emergency Alerts
 
----
-
-# 8. TELEMETRIA LOCAL
-
-Sem servidor externo.
-
-Registrar:
-- Tempo ativo
-- Últimos reinícios
-- Falhas
-- Status de rede
-
-Auxilia suporte técnico e profissionalização.
+Adding a module must not require restructuring the entire application.
 
 ---
 
-# 9. EVOLUÇÃO COMERCIAL FUTURA
+## 5. Priority & Emergency System
 
-Após estabilidade técnica:
+A mature institutional platform needs content priority.
 
-- Licenciamento local
-- Modo demo
-- Atualização offline
-- Futuro auto-update opcional
-- Pacotes por cliente
+Priority levels (conceptual):
 
-CLUBAL deve ser:
-- Simples para instalar
-- Simples para operar
-- Difícil de quebrar
+- Normal (default)
+- Highlight (more frequent / more visible)
+- Urgent (interrupt rotation)
+- Blocking (full-screen takeover)
+
+Emergency mode must be activatable locally (offline-safe), for example:
+
+- local flag file
+- configuration field
+- admin action
+
+Behavior:
+
+- interrupts normal rotation
+- shows a dedicated emergency screen or message
+- remains stable without internet
 
 ---
 
-# 10. DIREÇÃO DE LONGO PRAZO
+## 6. Multi-Profile Branding
 
-CLUBAL não é apenas software.
-É uma base de produto escalável.
+A single build should support multiple institutions.
 
-Evolução deve sempre preservar:
+Profiles should enable:
 
-- Leveza
-- Execução portátil
-- Independência de internet
-- Robustez offline
-- Estrutura modular
-- Compatibilidade com TV
+- customer logo and branding assets
+- location and weather settings (optional)
+- theme choices and layout variations
+- local holidays configuration
 
-Produto cresce.
-Complexidade não.
+Profile selection should be possible without complex setup.
+
+---
+
+## 7. Operator Experience (TV-Ready UX)
+
+The system must work even without a keyboard.
+
+Design direction:
+
+- large touch-friendly controls (if interaction is enabled)
+- optional welcome screen
+- configurable auto-start
+- safe shutdown options for controlled environments
+- clear visual hierarchy for distance viewing
+
+---
+
+## 8. Local Administration (Lightweight)
+
+CLUBAL should provide a lightweight local administration mode:
+
+- change basic settings
+- import or refresh schedule data
+- clear cache/logs (if writable)
+- view system status (offline-safe)
+- activate emergency mode
+
+This mode must not require a web server.
+
+---
+
+## 9. Local Telemetry (Optional, Offline-Safe)
+
+CLUBAL may record minimal local telemetry for support and maintenance:
+
+- uptime counters
+- last boot timestamps
+- crash counters
+- last known network state (optional)
+
+No external server dependency is required.
+
+---
+
+## 10. Commercial Direction (After Stability)
+
+After technical stability and modularization maturity:
+
+- professional packaging
+- licensing strategy (optional)
+- offline update packages
+- customer profiles distribution
+- support-oriented diagnostics
+
+Commercial growth must not compromise:
+
+- portability
+- offline resilience
+- stability
+- low resource usage
+
+---
+
+## 11. Long-Term Direction
+
+CLUBAL grows in capability, not in fragility.
+
+The product must always preserve:
+
+- lightweight execution
+- offline-first behavior
+- portable compatibility
+- TV readiness
+- modular content expansion
+- operational simplicity

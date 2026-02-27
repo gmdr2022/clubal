@@ -1,104 +1,111 @@
-# CLUBAL — VISÃO E FUNDAMENTOS
+# CLUBAL — Vision & Foundations
 
-## 1. Identidade do Projeto
+## 1. Project Identity
 
-CLUBAL (Club Agenda Live) é uma plataforma leve de comunicação institucional,
-projetada para operar de forma estável em:
+CLUBAL (Club Agenda Live) is a lightweight institutional communication platform designed for resilient execution across diverse environments:
 
-- PCs Windows (fracos ou modernos)
-- TVs com Windows
-- Execução via pendrive (modo portátil)
-- Ambientes corporativos com restrições
-- Ambientes offline
+- Windows PCs (low-end or modern)
+- Windows-based TVs
+- Portable/pendrive execution
+- Corporate restricted environments
+- Fully offline scenarios
 
-Stack oficial (atual):
+Official stack:
+
 - Python
 - Tkinter
-- Pillow (fallback de imagens quando necessário)
+- Pillow (image compatibility layer when required)
 
-O foco é robustez, simplicidade operacional e escalabilidade progressiva.
+The core focus is stability, operational simplicity, and progressive scalability.
 
 ---
 
-## 2. Filosofia Central
+## 2. Core Philosophy
 
-CLUBAL é:
+CLUBAL is:
 
 - Offline-first
-- Portátil
-- Leve
-- Estável
-- Modular
-- Preparado para se tornar produto comercial
+- Portable
+- Lightweight
+- Event-driven
+- Resilient
+- Modular by design
+- Prepared for commercial evolution
 
-Não depende obrigatoriamente de:
-- Internet
-- APPDATA
-- Teclado
-- Instalações complexas
+The system must never strictly depend on:
 
-Sempre deve funcionar lendo apenas dados locais.
+- Internet connectivity
+- APPDATA availability
+- Complex installation processes
+- External services for basic functionality
 
----
-
-## 3. Pilares Técnicos Permanentes
-
-1. Nunca falhar por ausência de permissão de escrita.
-2. Sempre possuir fallback silencioso de paths.
-3. Não depender rigidamente de Windows.
-4. Nunca travar se não houver internet.
-5. Não recriar layout inteiro em rotações.
-6. Não utilizar loops agressivos.
-7. Toda atualização deve ser event-driven e cacheada.
-8. Build deve incluir Pillow e assets gráficos.
-9. Sempre respeitar modo portátil.
+Local execution must always remain sufficient.
 
 ---
 
-## 4. Política de Paths (Diretriz Permanente)
+## 3. Permanent Technical Pillars
 
-Regra conceitual:
+1. Never fail due to lack of write permission.
+2. Always provide silent path fallback.
+3. Never require constant internet access.
+4. Avoid aggressive loops or polling.
+5. Prefer event-driven updates.
+6. Preserve layout stability during content rotation.
+7. Minimize CPU usage.
+8. Ensure portable compatibility.
+9. Bundle required image dependencies during packaging.
 
-IF Windows + APPDATA acessível:
-    usar %LOCALAPPDATA%\ClubAL\
-ELSE:
-    usar diretório local do executável:
-        ./data/
-        ./cache/
-        ./logs/
-
-Nunca lançar erro fatal por path.
-Sempre fallback automático e silencioso.
-
----
-
-## 5. Regras Fixas de Implementação (Contrato Interno)
-
-1. Sempre indicar o que procurar com Ctrl+F.
-2. Sempre indicar exatamente a ação:
-   - apagar
-   - colar antes
-   - colar depois
-   - substituir por
-3. Código entregue sempre completo e pronto para copiar/colar.
-4. Se houver múltiplas alterações na mesma função:
-   entregar a função completa.
-5. Resolver um problema por vez.
-6. Evitar refatorações amplas não solicitadas.
+These rules are permanent and non-negotiable.
 
 ---
 
-## 6. Direção Estratégica
+## 4. Path Policy (Conceptual Contract)
 
-CLUBAL não é apenas uma agenda com clima.
+The system resolves runtime paths through a centralized policy.
 
-É uma plataforma modular de comunicação institucional resiliente.
+If a writable system directory is available:
+- It may be used for logs and cache.
 
-Agenda, clima, feriados e futuros módulos são conteúdos.
-A estrutura é o núcleo.
+If no writable directory is available:
+- The system falls back to safe local behavior.
+- Logging and caching may be disabled.
+- The application must continue running.
 
-Evolução deve preservar:
-- Leveza
-- Compatibilidade TV
-- Execução portátil
-- Robustez offline
+No fatal errors due to permission issues are allowed.
+
+---
+
+## 5. Internal Engineering Contract
+
+All code evolution must follow these operational rules:
+
+- Always specify exact search targets (Ctrl+F).
+- Always specify the exact action:
+  - delete
+  - replace
+  - paste before
+  - paste after
+- Provide complete, ready-to-paste code blocks.
+- If multiple changes affect the same function:
+  - deliver the entire function.
+- Solve one structural problem at a time.
+- Avoid broad refactors unless strategically required.
+
+---
+
+## 6. Strategic Direction
+
+CLUBAL is not simply an agenda application.
+
+It is a modular institutional communication platform.
+
+Agenda, weather, holidays, and future modules are content.
+The architecture is the core.
+
+Evolution must always preserve:
+
+- Lightweight execution
+- TV compatibility
+- Portable operation
+- Offline resilience
+- Architectural clarity

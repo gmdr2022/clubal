@@ -3625,6 +3625,7 @@ class WeatherCard(tk.Frame):
 
 class ClubalApp(tk.Tk):
     def __init__(self):
+        self.ctx = ctx
         super().__init__()
 
         # DPI / Tk scaling: estabiliza o mesmo layout em 1360x768 e 1920x1080 (com escalas diferentes)
@@ -4828,7 +4829,7 @@ class ClubalApp(tk.Tk):
                 city_label="Alfenas",
                 lat=-21.4267,
                 lon=-45.9470,
-                app_dir=APP_DIR,
+                app_dir=str(self.ctx.paths.app_dir),
                 user_agent="CLUBAL-AgendaLive/2.0 (contact: local)",
                 logger=log,
             )

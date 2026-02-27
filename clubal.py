@@ -35,6 +35,29 @@ if PROJECT_ROOT not in sys.path:
 
 from core.bootstrap import bootstrap
 
+from ui.theme import (
+    SP_4,
+    SP_8,
+    SP_12,
+    SP_16,
+    SP_20,
+    SP_24,
+    SP_32,
+    RADIUS_SM,
+    RADIUS_MD,
+    RADIUS_LG,
+    SHADOW_SOFT,
+    SHADOW_MD,
+    MS_CARD_ROTATE,
+    MS_SCROLL_TICK,
+    MS_MARQUEE_TICK,
+    MS_MARQUEE_SPEED_PX,
+    MS_SECTION_SCROLL_SPEED_PX,
+    MS_HOURS_ROTATE,
+    theme_is_day,
+    build_app_palette,
+)
+
 ctx = bootstrap()
 
 # Pillow é opcional: melhora compatibilidade e redimensionamento de PNG (fallback para tk.PhotoImage).
@@ -131,38 +154,6 @@ def _force_tk_scaling_96dpi(root: tk.Tk) -> float:
 
 # Build ID para diagnóstico (logs).
 CLUBAL_UI_BUILD = f"UI_BUILD_{time.strftime('%Y-%m-%d')}A"
-
-# -------------------------
-# UI tokens (8pt scale) — base para manutenção/refatoração
-# -------------------------
-
-UI8 = 8
-
-# Espaçamentos (múltiplos de 8)
-SP_4 = 4
-SP_8 = 8
-SP_12 = 12
-SP_16 = 16
-SP_20 = 20
-SP_24 = 24
-SP_32 = 32
-
-# Raios padrão
-RADIUS_SM = 14
-RADIUS_MD = 18
-RADIUS_LG = 22
-
-# Sombras (offsets)
-SHADOW_SOFT = (2, 3)
-SHADOW_MD = (3, 4)
-
-# Tempos de animação/rotina (ms)
-MS_CARD_ROTATE = 4500
-MS_SCROLL_TICK = 25
-MS_MARQUEE_TICK = 25
-MS_MARQUEE_SPEED_PX = 1
-MS_SECTION_SCROLL_SPEED_PX = 1
-MS_HOURS_ROTATE = 16000
 
 # -------------------------
 # Infra/IO consolidado em bootstrap + ctx.paths + logging local
@@ -579,11 +570,6 @@ def _split_clock_hhmm_ss(t: str) -> Tuple[str, str]:
         return s[:5], "00"
     except Exception:
         return "00:00", "00"
-
-
-def theme_is_day() -> bool:
-    h = time.localtime().tm_hour
-    return 6 <= h <= 17
 
 
 def fmt_hhmm(mins: Optional[int]) -> str:
@@ -3775,20 +3761,18 @@ class ClubalApp(tk.Tk):
     # -------------------------
     # Theme
     # -------------------------
+
     def _apply_theme(self):
         self.is_day_theme = theme_is_day()
-        self.bg_root = "#f5f7fb" if self.is_day_theme else "#06101f"
+        palette = build_app_palette(self.is_day_theme)
 
-        # ✅ Dia: header claro (o painel azul é desenhado no _build_ui)
-        # ✅ Noite: header já fica mais escuro por padrão
-        self.bg_header = "#f5f7fb" if self.is_day_theme else "#071a33"
-
-        self.fg_primary = "#0b2d4d" if self.is_day_theme else "#eaf2ff"
-        self.fg_soft = "#5c6f86" if self.is_day_theme else "#b9c7dd"
-
-        self.div_main = "#cfd8e5" if self.is_day_theme else "#0f2543"
-        self.div_hi = "#e9eef5" if self.is_day_theme else "#16365f"
-        self.div_lo = "#b7c3d4" if self.is_day_theme else "#08172c"
+        self.bg_root = palette["bg_root"]
+        self.bg_header = palette["bg_header"]
+        self.fg_primary = palette["fg_primary"]
+        self.fg_soft = palette["fg_soft"]
+        self.div_main = palette["div_main"]
+        self.div_hi = palette["div_hi"]
+        self.div_lo = palette["div_lo"]
 
         self.configure(bg=self.bg_root)
 

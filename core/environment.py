@@ -48,7 +48,10 @@ def _writable_dir_probe(base: Path) -> bool:
         base.mkdir(parents=True, exist_ok=True)
         probe = base / ".__clubal_write_probe__"
         probe.write_text("ok", encoding="utf-8")
-        probe.unlink(missing_ok=True)  # py3.8+ ok no Windows
+        try:
+            probe.unlink()
+        except Exception:
+            pass
         return True
     except Exception:
         return False
@@ -67,9 +70,12 @@ def detect_environment() -> Environment:
         forced_portable = True
 
     mode = "portable"
+
+    # installed só se Windows + LOCALAPPDATA existe + conseguimos escrever no diretório do app
     if not forced_portable and is_win and la is not None:
-        # installed só se conseguir escrever em LOCALAPPDATA
-        if _writable_dir_probe(la / "CLUBAL"):
+        # Padroniza com o que o weather_service já usa
+        installed_root = la / "CLUBAL_Agenda_Live"
+        if _writable_dir_probe(installed_root):
             mode = "installed"
 
     return Environment(

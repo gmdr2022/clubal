@@ -26,7 +26,16 @@ from typing import List, Optional, Tuple, Dict
 import tkinter as tk
 import tkinter.font as tkfont
 
+# garante que o root do projeto entre no sys.path quando este arquivo
+# for executado diretamente a partir de app/clubal.py
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(THIS_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from core.bootstrap import bootstrap
+
+ctx = bootstrap()
 
 # Pillow é opcional: melhora compatibilidade e redimensionamento de PNG (fallback para tk.PhotoImage).
 try:
@@ -159,49 +168,22 @@ MS_HOURS_ROTATE = 16000
 # Infra/IO (candidato a módulo: infra.py): paths, logging, selftest
 # -------------------------
 
-def app_dir() -> str:
-    # Works for python and PyInstaller
-    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+APP_DIR = str(ctx.paths.app_dir)
+DATA_DIR = str(ctx.paths.writable_root) if ctx.paths.writable_root is not None else str(ctx.paths.data_dir)
 
-
-def data_dir(app_name: str = "CLUBAL_Agenda_Live") -> str:
-    """
-    Diretório gravável por usuário.
-    - Em PCs corporativos, evita problemas quando o app roda em Program Files.
-    - Se LOCALAPPDATA não existir, cai no APP_DIR (melhor esforço).
-    """
-    base = os.environ.get("LOCALAPPDATA")
-    if not base:
-        p = os.path.join(app_dir(), "_data")
-        os.makedirs(p, exist_ok=True)
-        return p
-    p = os.path.join(base, app_name)
-    os.makedirs(p, exist_ok=True)
-    return p
-
-
-APP_DIR = app_dir()
-DATA_DIR = data_dir()
-
-GRAPHICS_DIR = os.path.join(APP_DIR, "graphics")
+GRAPHICS_DIR = str(ctx.paths.assets_dir)
 
 # -------------------------
-# Graphics: fixed CLUBAL icon + dynamic client logo folder (ATUALIZADO p/ sua estrutura)
-# Estrutura real (prints):
-#   graphics/logos/brand/CLUBAL_ICO.png
-#   graphics/logos/client/*.png
-#   graphics/weather/bg/weather_day(.png/.jpg)  weather_night(.png/.jpg)
+# Graphics: fixed CLUBAL icon + dynamic client logo folder
 # -------------------------
 
 GRAPHICS_LOGOS_DIR = os.path.join(GRAPHICS_DIR, "logos")
 GRAPHICS_BRAND_DIR = os.path.join(GRAPHICS_LOGOS_DIR, "brand")
 GRAPHICS_CLIENT_DIR = os.path.join(GRAPHICS_LOGOS_DIR, "client")
 
-CLUBAL_ICON_FILE = "CLUBAL_ICO.png"                 # dentro de graphics/logos/brand/
-CLIENT_LOGO_DIRNAME = os.path.join("logos", "client")  # dentro de graphics/logos/client/
-CLIENT_LOGO_FALLBACK = "logo_sesi_default.png"      # fallback (se existir), senão usa o primeiro da pasta
+CLUBAL_ICON_FILE = "CLUBAL_ICO.png"   # dentro de graphics/logos/brand/
+CLIENT_LOGO_DIRNAME = os.path.join("logos", "client")
+CLIENT_LOGO_FALLBACK = "logo_sesi_default.png"
 
 
 def _first_image_in_dir(dir_path: str) -> Optional[str]:
@@ -218,6 +200,7 @@ def _first_image_in_dir(dir_path: str) -> Optional[str]:
             p = os.path.join(dir_path, name)
             if not os.path.isfile(p):
                 continue
+
             low = name.lower()
             if low.endswith((".png", ".jpg", ".jpeg", ".gif")):
                 files.append(p)
@@ -227,63 +210,82 @@ def _first_image_in_dir(dir_path: str) -> Optional[str]:
 
         files.sort(key=lambda x: os.path.basename(x).lower())
         return files[0]
+
     except Exception:
         return None
 
+
 def _img_path_try(base: str) -> Optional[str]:
     """
-    Procura assets em múltiplas pastas (inclui sua estrutura nova).
+    Procura assets em múltiplas pastas.
     Aceita 'base' com ou sem extensão.
     """
-    b = str(base or "").strip()
-    if not b:
+    try:
+        b = str(base or "").strip()
+        if not b:
+            return None
+
+        has_ext = b.lower().endswith((".png", ".gif", ".jpg", ".jpeg"))
+
+        search_dirs = [
+            GRAPHICS_DIR,
+            GRAPHICS_LOGOS_DIR,
+            GRAPHICS_BRAND_DIR,
+            GRAPHICS_CLIENT_DIR,
+            os.path.join(GRAPHICS_DIR, "weather", "icons"),
+            os.path.join(GRAPHICS_DIR, "weather", "bg"),
+        ]
+
+        candidates = []
+        if has_ext:
+            candidates.append(b)
+        else:
+            candidates.extend([
+                b + ".png",
+                b + ".PNG",
+                b + ".jpg",
+                b + ".JPG",
+                b + ".jpeg",
+                b + ".JPEG",
+                b + ".gif",
+                b + ".GIF",
+            ])
+
+        for d in search_dirs:
+            for name in candidates:
+                p = os.path.join(d, name)
+                if os.path.exists(p):
+                    return p
+
         return None
 
-    has_ext = b.lower().endswith((".png", ".gif", ".jpg", ".jpeg"))
+    except Exception:
+        return None
 
-    search_dirs = [
-        GRAPHICS_DIR,
-        GRAPHICS_LOGOS_DIR,
-        GRAPHICS_BRAND_DIR,
-        GRAPHICS_CLIENT_DIR,
-        os.path.join(GRAPHICS_DIR, "weather", "icons"),
-        os.path.join(GRAPHICS_DIR, "weather", "bg"),
-    ]
-
-    candidates = []
-    if has_ext:
-        candidates.append(b)
-    else:
-        candidates.extend([
-            b + ".png", b + ".PNG",
-            b + ".jpg", b + ".JPG",
-            b + ".jpeg", b + ".JPEG",
-            b + ".gif", b + ".GIF",
-        ])
-
-    for d in search_dirs:
-        for name in candidates:
-            p = os.path.join(d, name)
-            if os.path.exists(p):
-                return p
-
-    return None
-
-# logs em local gravável
-LOGS_DIR = os.path.join(DATA_DIR, "logs")
-os.makedirs(LOGS_DIR, exist_ok=True)
-LOG_PATH = os.path.join(LOGS_DIR, "clubal.log")
+# logs em local gravável (ou desabilitados, se o ambiente bloquear escrita)
+LOGS_DIR = str(ctx.paths.logs_dir) if ctx.paths.logs_dir is not None else None
+LOG_PATH = os.path.join(LOGS_DIR, "clubal.log") if LOGS_DIR else None
+LOG_ARCHIVE_DIR = os.path.join(LOGS_DIR, "archive") if LOGS_DIR else None
 
 # Rotação/limpeza de logs (evita crescimento infinito de arquivo).
-LOG_ARCHIVE_DIR = os.path.join(LOGS_DIR, "archive")
-os.makedirs(LOG_ARCHIVE_DIR, exist_ok=True)
-
 LOG_ROTATE_MAX_BYTES = 2 * 1024 * 1024   # 2MB
 LOG_ARCHIVE_KEEP = 6                     # mantém os últimos N logs arquivados
 LOG_ARCHIVE_MAX_AGE_DAYS = 30            # e/ou apaga logs muito antigos
 
 
-def _safe_unlink(path: str) -> None:
+def _ensure_log_archive_dir() -> bool:
+    if not LOG_ARCHIVE_DIR:
+        return False
+    try:
+        os.makedirs(LOG_ARCHIVE_DIR, exist_ok=True)
+        return True
+    except Exception:
+        return False
+
+
+def _safe_unlink(path: Optional[str]) -> None:
+    if not path:
+        return
     try:
         os.remove(path)
     except Exception:
@@ -295,13 +297,22 @@ def _rotate_logs_if_needed(logger=None) -> None:
     Rotaciona clubal.log quando cresce demais.
     - Move para logs/archive/clubal_YYYYMMDD_HHMMSS.log
     - Mantém no máximo LOG_ARCHIVE_KEEP arquivos e remove os muito antigos
+    - Se o ambiente não tiver pasta gravável para logs, não faz nada
     """
     try:
-        if not os.path.exists(LOG_PATH):
+        if not LOG_PATH or not LOG_ARCHIVE_DIR:
             return
+
+        if not os.path.exists(LOG_PATH):
+            _cleanup_log_archive()
+            return
+
         size = os.path.getsize(LOG_PATH)
         if size < LOG_ROTATE_MAX_BYTES:
             _cleanup_log_archive()
+            return
+
+        if not _ensure_log_archive_dir():
             return
 
         ts = time.strftime("%Y%m%d_%H%M%S")
@@ -326,6 +337,9 @@ def _rotate_logs_if_needed(logger=None) -> None:
 
 def _cleanup_log_archive() -> None:
     try:
+        if not LOG_ARCHIVE_DIR or not os.path.isdir(LOG_ARCHIVE_DIR):
+            return
+
         files = []
         now = time.time()
         max_age = LOG_ARCHIVE_MAX_AGE_DAYS * 86400
@@ -352,10 +366,18 @@ def _cleanup_log_archive() -> None:
     except Exception:
         pass
 
+
 _log_lock = threading.Lock()
+
+
 def log(msg: str) -> None:
     try:
+        if not LOG_PATH:
+            return
+
         with _log_lock:
+            if LOGS_DIR:
+                os.makedirs(LOGS_DIR, exist_ok=True)
             _rotate_logs_if_needed()
             ts = time.strftime("%Y-%m-%d %H:%M:%S")
             with open(LOG_PATH, "a", encoding="utf-8") as f:
@@ -581,7 +603,7 @@ def fmt_hhmm(mins: Optional[int]) -> str:
 # Excel read
 # -------------------------
 
-EXCEL_PATH = os.path.join(APP_DIR, "grade.xlsx")
+EXCEL_PATH = os.path.join(str(ctx.paths.data_dir), "grade.xlsx")
 SHEET_NAME = "CLUBAL"
 
 EXPECTED_HEADERS = ["DIA", "INICIO", "FIM", "MODALIDADE", "PROFESSOR", "TAG"]
@@ -2779,7 +2801,7 @@ class WeatherCard(tk.Frame):
             icon_path = weather_mod.get_official_icon_png_path(
                 symbol_code=symbol_code,
                 is_day=is_day,
-                app_dir=APP_DIR,
+                app_dir=str(self.ctx.paths.app_dir),
                 logger=log,
                 user_agent="CLUBAL-AgendaLive/2.0 (contact: local)",
             )
@@ -2790,26 +2812,19 @@ class WeatherCard(tk.Frame):
         def _apply():
             if (self._symbol_code or None) != (symbol_code or None):
                 return
-            if getattr(self, "_disposed", False):
+
+            self._icon_loading = False
+
+            if not icon_path or not os.path.exists(icon_path):
+                self._set_photo(None)
                 return
 
-            if icon_path and os.path.exists(icon_path):
-                self._icon_path_pending = icon_path
-                self._last_official_icon_path = icon_path
-                if symbol_code:
-                    self._last_good_symbol_code = symbol_code
-
-                self._update_icon(icon_path)
-                self._place_icon()
-                log(f"[WEATHER][ICON] applied official path={icon_path}")
-            else:
-                if self._last_official_icon_path and os.path.exists(self._last_official_icon_path):
-                    self._icon_path_pending = self._last_official_icon_path
-                    self._update_icon(self._last_official_icon_path)
-                    self._place_icon()
-                    log(f"[WEATHER][ICON] official not available; kept last path={self._last_official_icon_path}")
-                else:
-                    log("[WEATHER][ICON] official not available; keeping current/fallback")
+            try:
+                photo = self._make_icon_photo(icon_path)
+                self._set_photo(photo)
+            except Exception as e:
+                log(f"[WEATHER][ICON] apply exception {type(e).__name__}: {e}")
+                self._set_photo(None)
 
         try:
             self.after(0, _apply)
@@ -3666,8 +3681,9 @@ class ClubalApp(tk.Tk):
 
         _rotate_logs_if_needed(logger=log)
 
-        log(f"[BOOT] APP_DIR={APP_DIR}")
-        log(f"[BOOT] DATA_DIR={DATA_DIR}")
+        log(f"[BOOT] APP_DIR={self.ctx.paths.app_dir}")
+        log(f"[BOOT] DATA_DIR={self.ctx.paths.data_dir}")
+        log(f"[BOOT] WRITABLE_ROOT={self.ctx.paths.writable_root}")
         log(f"[BOOT] EXCEL_PATH={EXCEL_PATH} exists={os.path.exists(EXCEL_PATH)}")
         log(f"[BOOT] GRAPHICS_DIR={GRAPHICS_DIR} exists={os.path.exists(GRAPHICS_DIR)}")
         log(f"[BOOT] LOG_PATH={LOG_PATH}")
@@ -3675,7 +3691,7 @@ class ClubalApp(tk.Tk):
         log(f"[BOOT] DEBUG_LAYOUT={self.DEBUG_LAYOUT}")
 
         try:
-            weather_mod.housekeeping(app_dir=APP_DIR, logger=log)
+            weather_mod.housekeeping(app_dir=str(self.ctx.paths.app_dir), logger=log)
         except Exception as e:
             log(f"[WEATHER] Housekeeping error {type(e).__name__}: {e}")
 
@@ -3684,7 +3700,7 @@ class ClubalApp(tk.Tk):
             fn = getattr(weather_mod, "start_icon_pack_update_async", None)
             if callable(fn):
                 fn(
-                    app_dir=APP_DIR,
+                    app_dir=str(self.ctx.paths.app_dir),
                     logger=log,
                     user_agent="CLUBAL-AgendaLive/2.0 (contact: local)",
                 )
@@ -3700,7 +3716,6 @@ class ClubalApp(tk.Tk):
 
         # ✅ antes: 9000 (9s). Agora mais confortável/premium:
         self.after(MS_HOURS_ROTATE, self._rotate_hours)
-
     # -------------------------
     # Helpers
     # -------------------------
@@ -4860,7 +4875,7 @@ class ClubalApp(tk.Tk):
         self._last_housekeeping_ts = time.time()
         try:
             _rotate_logs_if_needed(logger=log)
-            weather_mod.housekeeping(app_dir=APP_DIR, logger=log)
+            weather_mod.housekeeping(app_dir=str(self.ctx.paths.app_dir), logger=log)
         except Exception as e:
             log(f"[HK] error {type(e).__name__}: {e}")
 
@@ -4935,7 +4950,6 @@ class ClubalApp(tk.Tk):
         self.after(1000, self._tick)
 
 if __name__ == "__main__":
-    ctx = bootstrap()
     try:
         _enable_windows_dpi_awareness()  # precisa ocorrer antes do Tk criar janelas
         _selftest_geometry(logger=log)

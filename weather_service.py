@@ -179,13 +179,17 @@ def _cache_paths(app_dir: str) -> Tuple[Optional[str], Optional[str]]:
 
 
 def _icons_dir(app_dir: str) -> Optional[str]:
-    root = _cache_root(app_dir)
-    if not root:
-        return None
+    """
+    Ícones ficam direto em:
+      <writable_root>/package/weather_icons/
+    (sem subpasta "weather/"), para evitar duplicação.
+    """
+    _ = app_dir  # compat
 
-    p = os.path.join(root, ICONS_DIRNAME)
-    _safe_mkdir(p)
-    return p
+    p = cache_subdir(_PATHS, ICONS_DIRNAME)
+    if p is None:
+        return None
+    return str(p)
 
 def _archive_existing_cache(current_path: str, archive_dir: str, logger=None) -> None:
     try:

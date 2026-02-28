@@ -58,6 +58,8 @@ from ui.theme import (
     build_app_palette,
 )
 
+from infra.logging_manager import rotate_logs_if_needed, write_log
+
 ctx = bootstrap()
 
 # Pillow é opcional: melhora compatibilidade e redimensionamento de PNG (fallback para tk.PhotoImage).
@@ -260,6 +262,13 @@ LOG_ROTATE_MAX_BYTES = 2 * 1024 * 1024   # 2MB
 LOG_ARCHIVE_KEEP = 6                     # mantém os últimos N logs arquivados
 LOG_ARCHIVE_MAX_AGE_DAYS = 30            # e/ou apaga logs muito antigos
 
+def log(msg: str) -> None:
+    try:
+        rotate_logs_if_needed(LOG_PATH, LOG_ARCHIVE_DIR)
+        write_log(LOG_PATH, LOGS_DIR, msg)
+    except Exception:
+        pass
+
 
 def _ensure_log_archive_dir() -> bool:
     if not LOG_ARCHIVE_DIR:
@@ -269,109 +278,6 @@ def _ensure_log_archive_dir() -> bool:
         return True
     except Exception:
         return False
-
-
-def _safe_unlink(path: Optional[str]) -> None:
-    if not path:
-        return
-    try:
-        os.remove(path)
-    except Exception:
-        pass
-
-
-def _rotate_logs_if_needed(logger=None) -> None:
-    """
-    Rotaciona clubal.log quando cresce demais.
-    - Move para logs/archive/clubal_YYYYMMDD_HHMMSS.log
-    - Mantém no máximo LOG_ARCHIVE_KEEP arquivos e remove os muito antigos
-    - Se o ambiente não tiver pasta gravável para logs, não faz nada
-    """
-    try:
-        if not LOG_PATH or not LOG_ARCHIVE_DIR:
-            return
-
-        if not os.path.exists(LOG_PATH):
-            _cleanup_log_archive()
-            return
-
-        size = os.path.getsize(LOG_PATH)
-        if size < LOG_ROTATE_MAX_BYTES:
-            _cleanup_log_archive()
-            return
-
-        if not _ensure_log_archive_dir():
-            return
-
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        archived = os.path.join(LOG_ARCHIVE_DIR, f"clubal_{ts}.log")
-        try:
-            os.replace(LOG_PATH, archived)
-        except Exception:
-            with open(LOG_PATH, "rb") as src, open(archived, "wb") as dst:
-                dst.write(src.read())
-            with open(LOG_PATH, "w", encoding="utf-8"):
-                pass
-
-        if logger:
-            logger(f"[LOG] Rotated clubal.log -> {archived}")
-
-        _cleanup_log_archive()
-
-    except Exception as e:
-        if logger:
-            logger(f"[LOG] Rotate error {type(e).__name__}: {e}")
-
-
-def _cleanup_log_archive() -> None:
-    try:
-        if not LOG_ARCHIVE_DIR or not os.path.isdir(LOG_ARCHIVE_DIR):
-            return
-
-        files = []
-        now = time.time()
-        max_age = LOG_ARCHIVE_MAX_AGE_DAYS * 86400
-
-        for name in os.listdir(LOG_ARCHIVE_DIR):
-            p = os.path.join(LOG_ARCHIVE_DIR, name)
-            if not os.path.isfile(p):
-                continue
-            try:
-                st = os.stat(p)
-            except Exception:
-                continue
-
-            if max_age > 0 and (now - st.st_mtime) > max_age:
-                _safe_unlink(p)
-                continue
-
-            files.append((st.st_mtime, p))
-
-        files.sort(reverse=True)  # mais novo primeiro
-        for _mtime, p in files[LOG_ARCHIVE_KEEP:]:
-            _safe_unlink(p)
-
-    except Exception:
-        pass
-
-
-_log_lock = threading.Lock()
-
-
-def log(msg: str) -> None:
-    try:
-        if not LOG_PATH:
-            return
-
-        with _log_lock:
-            if LOGS_DIR:
-                os.makedirs(LOGS_DIR, exist_ok=True)
-            _rotate_logs_if_needed()
-            ts = time.strftime("%Y-%m-%d %H:%M:%S")
-            with open(LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(f"[{ts}] {msg}\n")
-    except Exception:
-        pass
 
 def _selftest_geometry(logger=log) -> None:
     """
@@ -2491,6 +2397,71 @@ class WeatherCard(tk.Frame):
             tail = s.split(":", 1)[1].strip()
             return tail if tail else "—"
         return s
+    
+    def _weather_icon_code_candidates(self, symbol_code: Optional[str], is_day: bool) -> List[str]:
+        if not symbol_code:
+            return []
+
+        s = str(symbol_code).strip().lower()
+        if not s:
+            return []
+
+        if s.endswith("_day") or s.endswith("_night") or s.endswith("_polartwilight"):
+            return [s]
+
+        suf = "day" if is_day else "night"
+
+        out = [s, f"{s}_{suf}"]
+        seen = set()
+        final = []
+
+        for item in out:
+            if item and item not in seen:
+                seen.add(item)
+                final.append(item)
+
+        return final
+
+    def _cached_weather_icon_path(self, symbol_code: Optional[str], is_day: bool) -> Optional[str]:
+        candidates = self._weather_icon_code_candidates(symbol_code, is_day)
+        if not candidates:
+            return None
+
+        roots = []
+
+        try:
+            cache_dir = getattr(self.ctx.paths, "cache_dir", None)
+            if cache_dir:
+                roots.append(os.path.join(str(cache_dir), "weather_icons"))
+                roots.append(os.path.join(str(cache_dir), "weather", "weather_icons"))
+        except Exception:
+            pass
+
+        try:
+            la = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+            if la:
+                roots.append(os.path.join(la, "CLUBAL", "cache", "weather", "weather_icons"))
+                roots.append(os.path.join(la, "CLUBAL_Agenda_Live", "package", "weather_icons"))
+        except Exception:
+            pass
+
+        seen = set()
+        final_roots = []
+        for root in roots:
+            if root and root not in seen:
+                seen.add(root)
+                final_roots.append(root)
+
+        for root in final_roots:
+            if not os.path.isdir(root):
+                continue
+
+            for code in candidates:
+                p = os.path.join(root, f"{code}.png")
+                if os.path.exists(p):
+                    return p
+
+        return None    
 
     # -------------------------
     # TOP marquee (status direita) — CLIP REAL
@@ -2780,6 +2751,8 @@ class WeatherCard(tk.Frame):
     # -------------------------
 
     def _icon_worker(self, symbol_code: Optional[str], is_day: bool):
+        icon_path = None
+
         try:
             icon_path = weather_mod.get_official_icon_png_path(
                 symbol_code=symbol_code,
@@ -2792,22 +2765,44 @@ class WeatherCard(tk.Frame):
             log(f"[WEATHER][ICON] worker exception {type(e).__name__}: {e}")
             icon_path = None
 
+        if not icon_path:
+            try:
+                icon_path = self._cached_weather_icon_path(symbol_code, is_day)
+                if icon_path:
+                    log(f"[WEATHER][ICON] cache hit path={icon_path}")
+            except Exception as e:
+                log(f"[WEATHER][ICON] cache lookup exception {type(e).__name__}: {e}")
+                icon_path = None
+
         def _apply():
             if (self._symbol_code or None) != (symbol_code or None):
                 return
-
-            self._icon_loading = False
-
-            if not icon_path or not os.path.exists(icon_path):
-                self._set_photo(None)
+            if getattr(self, "_disposed", False):
                 return
 
-            try:
-                photo = self._make_icon_photo(icon_path)
-                self._set_photo(photo)
-            except Exception as e:
-                log(f"[WEATHER][ICON] apply exception {type(e).__name__}: {e}")
-                self._set_photo(None)
+            if icon_path and os.path.exists(icon_path):
+                self._icon_path_pending = icon_path
+                self._last_official_icon_path = icon_path
+                if symbol_code:
+                    self._last_good_symbol_code = symbol_code
+
+                self._update_icon(icon_path)
+                self._place_icon()
+                log(f"[WEATHER][ICON] applied path={icon_path}")
+                return
+
+            if self._last_official_icon_path and os.path.exists(self._last_official_icon_path):
+                self._icon_path_pending = self._last_official_icon_path
+                self._update_icon(self._last_official_icon_path)
+                self._place_icon()
+                log(f"[WEATHER][ICON] reused last path={self._last_official_icon_path}")
+                return
+
+            fallback_path = self._fallback_pin_path()
+            self._icon_path_pending = fallback_path
+            self._update_icon(fallback_path)
+            self._place_icon()
+            log(f"[WEATHER][ICON] fallback pin path={fallback_path}")
 
         try:
             self.after(0, _apply)
@@ -2822,7 +2817,6 @@ class WeatherCard(tk.Frame):
         self._city_text = (str(city).strip().upper() if city else "LOCAL") or "LOCAL"
         self._temp_text = f"{res.temp_c}°C" if res.temp_c is not None else "—°C"
 
-        # ✅ status ao vivo (vai pro topo): sempre CAIXA ALTA na UI
         self._live_status_text = (self._extract_now_desc_from_today_label(getattr(res, "today_label", "") or "") or "—").strip().upper()
 
         raw_forecast = (getattr(res, "tomorrow_label", None) or "Amanhã: —").strip()
@@ -2835,7 +2829,6 @@ class WeatherCard(tk.Frame):
         else:
             self._symbol_code = self._last_good_symbol_code
 
-        # ✅ Tag do bloco de temperatura: online vs cache/offline
         if getattr(res, "ok", False) and getattr(res, "source", "") != "cache":
             self._temp_tag_text = "TEMP. AGORA"
         else:
@@ -2845,18 +2838,26 @@ class WeatherCard(tk.Frame):
             else:
                 self._temp_tag_text = "OFFLINE"
 
-        # ✅ Estratégia de ícone base (evita piscar)
-        if self._last_official_icon_path and os.path.exists(self._last_official_icon_path):
-            self._icon_path_pending = self._last_official_icon_path
-            self._update_icon(self._last_official_icon_path)
-        else:
-            fallback_path = self._fallback_pin_path()
-            self._icon_path_pending = fallback_path
-            self._update_icon(fallback_path)
+        base_icon_path = None
+
+        if self._symbol_code:
+            try:
+                base_icon_path = self._cached_weather_icon_path(self._symbol_code, self.is_day_theme)
+            except Exception:
+                base_icon_path = None
+
+        if not base_icon_path and self._last_official_icon_path and os.path.exists(self._last_official_icon_path):
+            base_icon_path = self._last_official_icon_path
+
+        if not base_icon_path:
+            base_icon_path = self._fallback_pin_path()
+
+        self._icon_path_pending = base_icon_path
+        self._update_icon(base_icon_path)
+        self._place_icon()
 
         self._update_text_items()
 
-        # ✅ Só inicia thread de ícone se houver symbol_code
         try:
             if self._symbol_code:
                 log(f"[WEATHER][ICON] start async symbol_code={self._symbol_code} is_day={self.is_day_theme}")
@@ -3662,16 +3663,7 @@ class ClubalApp(tk.Tk):
 
         self.bind("<Escape>", lambda e: self.destroy())
 
-        _rotate_logs_if_needed(logger=log)
-
-        log(f"[BOOT] APP_DIR={self.ctx.paths.app_dir}")
-        log(f"[BOOT] DATA_DIR={self.ctx.paths.data_dir}")
-        log(f"[BOOT] WRITABLE_ROOT={self.ctx.paths.writable_root}")
-        log(f"[BOOT] EXCEL_PATH={EXCEL_PATH} exists={os.path.exists(EXCEL_PATH)}")
-        log(f"[BOOT] GRAPHICS_DIR={GRAPHICS_DIR} exists={os.path.exists(GRAPHICS_DIR)}")
-        log(f"[BOOT] LOG_PATH={LOG_PATH}")
-        log(f"[BOOT] {CLUBAL_UI_BUILD}")
-        log(f"[BOOT] DEBUG_LAYOUT={self.DEBUG_LAYOUT}")
+        rotate_logs_if_needed(LOG_PATH, LOG_ARCHIVE_DIR, logger=log)
 
         try:
             weather_mod.housekeeping(app_dir=str(self.ctx.paths.app_dir), logger=log)
@@ -4855,7 +4847,7 @@ class ClubalApp(tk.Tk):
             return
         self._last_housekeeping_ts = time.time()
         try:
-            _rotate_logs_if_needed(logger=log)
+            rotate_logs_if_needed(LOG_PATH, LOG_ARCHIVE_DIR, logger=log)
             weather_mod.housekeeping(app_dir=str(self.ctx.paths.app_dir), logger=log)
         except Exception as e:
             log(f"[HK] error {type(e).__name__}: {e}")

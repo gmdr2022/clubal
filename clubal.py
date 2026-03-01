@@ -24,6 +24,16 @@ from dataclasses import dataclass
 from core.models import ClassItem
 from core.date_text import date_time_strings, today_3letters_noaccent, weekday_full_noaccent
 from core.time_utils import fmt_hhmm, parse_hhmm, split_clock_hhmm_ss
+
+from core.ptbr_text import (
+    formal_date_line_ptbr,
+    month_abbr_ptbr,
+    month_name_ptbr,
+    weekday_abbr_ptbr,
+    weekday_full_ptbr,
+    weekday_short_ptbr,
+)
+
 from typing import List, Optional, Tuple, Dict
 
 import tkinter as tk
@@ -3647,87 +3657,19 @@ class ClubalApp(tk.Tk):
             if hasattr(self, "client_logo_lbl"):
                 self.client_logo_lbl.configure(image=None)
 
-    # -------------------------
-    # Date helpers
-    # -------------------------
-    def _weekday_full_ptbr(self) -> str:
-        wd = time.localtime().tm_wday  # Monday=0
-        return [
-            "SEGUNDA-FEIRA",
-            "TERÇA-FEIRA",
-            "QUARTA-FEIRA",
-            "QUINTA-FEIRA",
-            "SEXTA-FEIRA",
-            "SÁBADO",
-            "DOMINGO",
-        ][wd]
-
-    def _month_name_ptbr(self, month_num: int) -> str:
-        meses = [
-            "Janeiro", "Fevereiro", "Março", "Abril",
-            "Maio", "Junho", "Julho", "Agosto",
-            "Setembro", "Outubro", "Novembro", "Dezembro",
-        ]
-        if 1 <= month_num <= 12:
-            return meses[month_num - 1]
-        return "Mês"
-
-    def _formal_date_line_ptbr(self) -> str:
-        lt = time.localtime()
-        wd = self._weekday_full_ptbr()
-        dd = lt.tm_mday
-        mm = self._month_name_ptbr(lt.tm_mon)
-        yy = lt.tm_year
-        return f"{wd} • {dd} de {mm} de {yy}"
-
-    def _weekday_short_ptbr(self) -> str:
-        wd = time.localtime().tm_wday  # Monday=0
-        return [
-            "Segunda",
-            "Terça",
-            "Quarta",
-            "Quinta",
-            "Sexta",
-            "Sábado",
-            "Domingo",
-        ][wd]
-
-    def _weekday_abbr_ptbr(self) -> str:
-        wd = time.localtime().tm_wday  # Monday=0
-        return [
-            "Seg",
-            "Ter",
-            "Qua",
-            "Qui",
-            "Sex",
-            "Sáb",
-            "Dom",
-        ][wd]
-
-    def _month_abbr_ptbr(self, month_num: int) -> str:
-        meses = [
-            "Jan", "Fev", "Mar", "Abr",
-            "Mai", "Jun", "Jul", "Ago",
-            "Set", "Out", "Nov", "Dez",
-        ]
-        if 1 <= month_num <= 12:
-            return meses[month_num - 1]
-        return "Mês"
-
     def _build_datecard_candidates_ptbr(self) -> List[str]:
         lt = time.localtime()
 
-        wd_full = self._weekday_full_ptbr()          # ex: QUARTA-FEIRA
-        wd_title = wd_full.title()                   # ex: Quarta-Feira
-        wd_short = self._weekday_short_ptbr()        # ex: Quarta
-        wd_abbr = self._weekday_abbr_ptbr()          # ex: Qua
+        wd_full = weekday_full_ptbr()          # ex: QUARTA-FEIRA
+        wd_title = wd_full.title()             # ex: Quarta-Feira
+        wd_short = weekday_short_ptbr()        # ex: Quarta
+        wd_abbr = weekday_abbr_ptbr()          # ex: Qua
 
         dd = lt.tm_mday
-        mm_full = self._month_name_ptbr(lt.tm_mon)   # ex: Fevereiro
-        mm_abbr = self._month_abbr_ptbr(lt.tm_mon)   # ex: Fev
+        mm_full = month_name_ptbr(lt.tm_mon)   # ex: Fevereiro
+        mm_abbr = month_abbr_ptbr(lt.tm_mon)   # ex: Fev
         yy = lt.tm_year
 
-        # Ordem: mais completo -> mais compacto
         cands = [
             f"{wd_full}  •  {dd} de {mm_full} de {yy}",
             f"{wd_title}  •  {dd} de {mm_full} de {yy}",
@@ -3739,7 +3681,6 @@ class ClubalApp(tk.Tk):
             f"{wd_abbr} {dd} {mm_abbr}",
         ]
 
-        # remove duplicadas mantendo ordem
         seen = set()
         out = []
         for s in cands:
@@ -3846,7 +3787,7 @@ class ClubalApp(tk.Tk):
             # último caso: ellipsis sobre a menor versão
             if chosen_text is None:
                 test_font.configure(size=min_size)
-                fallback = candidates[-1] if candidates else self._formal_date_line_ptbr()
+                fallback = candidates[-1] if candidates else formal_date_line_ptbr()
                 chosen_text = self._ellipsis_to_fit(fallback, test_font, max_w)
                 chosen_size = min_size
 

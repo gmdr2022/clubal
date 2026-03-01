@@ -2511,7 +2511,9 @@ class WeatherCard(tk.Frame):
         if self._tmarquee_frame is None or self._tmarquee_label1 is None or self._tmarquee_label2 is None:
             return
 
-        # cria/atualiza window (clip real)
+        top_label1 = self._tmarquee_label1
+        top_label2 = self._tmarquee_label2
+
         try:
             if self._tmarquee_win_id is None:
                 self._tmarquee_win_id = self.canvas.create_window(
@@ -2529,8 +2531,8 @@ class WeatherCard(tk.Frame):
         safe_text = (" ".join((text or "").split()) or "—").upper()
 
         try:
-            self._tmarquee_label1.configure(text=safe_text, font=self._f_title_status, bg=bg)
-            self._tmarquee_label2.configure(text=safe_text, font=self._f_title_status, bg=bg)
+            top_label1.configure(text=safe_text, font=self._f_title_status, bg=bg)
+            top_label2.configure(text=safe_text, font=self._f_title_status, bg=bg)
         except Exception:
             return
 
@@ -2547,31 +2549,28 @@ class WeatherCard(tk.Frame):
         y_center = int(max(0, (h - line_h) // 2))
         self._tmarquee_last_box = box
 
-        # cabe: estático à direita
         if text_w <= (w - 6):
             self._stop_top_marquee()
 
             x_right = int(max(0, w - text_w))
             try:
-                self._tmarquee_label1.place_configure(x=x_right, y=y_center)
-                self._tmarquee_label2.place_configure(x=w + 2000, y=y_center)
+                top_label1.place_configure(x=x_right, y=y_center)
+                top_label2.place_configure(x=w + 2000, y=y_center)
             except Exception:
                 pass
             return
 
-        # não cabe: marquee contínuo (rola para a esquerda)
         self._stop_top_marquee()
         self._tmarquee_running = True
 
         spacing = int(max(40, min(int(self._tmarquee_gap_px), max(40, w // 2))))
 
-        # entra pela direita
         self._tmarquee_x1 = int(w + 2)
         self._tmarquee_x2 = int(self._tmarquee_x1 + text_w + spacing)
 
         try:
-            self._tmarquee_label1.place_configure(x=self._tmarquee_x1, y=y_center)
-            self._tmarquee_label2.place_configure(x=self._tmarquee_x2, y=y_center)
+            top_label1.place_configure(x=self._tmarquee_x1, y=y_center)
+            top_label2.place_configure(x=self._tmarquee_x2, y=y_center)
         except Exception:
             pass
 
@@ -2591,8 +2590,8 @@ class WeatherCard(tk.Frame):
                 self._tmarquee_x2 = int(self._tmarquee_x1 + text_w + spacing)
 
             try:
-                self._tmarquee_label1.place_configure(x=self._tmarquee_x1)
-                self._tmarquee_label2.place_configure(x=self._tmarquee_x2)
+                top_label1.place_configure(x=self._tmarquee_x1)
+                top_label2.place_configure(x=self._tmarquee_x2)
             except Exception:
                 pass
 
@@ -2653,6 +2652,9 @@ class WeatherCard(tk.Frame):
         if self._forecast_frame is None or self._forecast_label is None or self._forecast_label2 is None:
             return
 
+        forecast_label1 = self._forecast_label
+        forecast_label2 = self._forecast_label2
+
         try:
             if self._forecast_win_id is None:
                 self._forecast_win_id = self.canvas.create_window(
@@ -2670,8 +2672,8 @@ class WeatherCard(tk.Frame):
         safe_text = " ".join((text or "").split()) or "—"
 
         try:
-            self._forecast_label.configure(text=safe_text, font=self._f_forecast)
-            self._forecast_label2.configure(text=safe_text, font=self._f_forecast)
+            forecast_label1.configure(text=safe_text, font=self._f_forecast)
+            forecast_label2.configure(text=safe_text, font=self._f_forecast)
         except Exception:
             return
 
@@ -2692,8 +2694,8 @@ class WeatherCard(tk.Frame):
             self._stop_marquee()
             x_center = int(max(0, (w - text_w) // 2))
             try:
-                self._forecast_label.place_configure(x=x_center, y=y_center)
-                self._forecast_label2.place_configure(x=w + 2000, y=y_center)
+                forecast_label1.place_configure(x=x_center, y=y_center)
+                forecast_label2.place_configure(x=w + 2000, y=y_center)
             except Exception:
                 pass
             return
@@ -2707,8 +2709,8 @@ class WeatherCard(tk.Frame):
         self._marquee_x2 = int(self._marquee_x + text_w + spacing)
 
         try:
-            self._forecast_label.place_configure(x=self._marquee_x, y=y_center)
-            self._forecast_label2.place_configure(x=self._marquee_x2, y=y_center)
+            forecast_label1.place_configure(x=self._marquee_x, y=y_center)
+            forecast_label2.place_configure(x=self._marquee_x2, y=y_center)
         except Exception:
             pass
 
@@ -2718,7 +2720,7 @@ class WeatherCard(tk.Frame):
             if self._marquee_last_box != box:
                 return
 
-            step = int(self._marquee_speed_px)
+            step = int(max(1, self._marquee_speed_px))
 
             self._marquee_x -= step
             self._marquee_x2 -= step
@@ -2729,8 +2731,8 @@ class WeatherCard(tk.Frame):
                 self._marquee_x2 = int(self._marquee_x + text_w + spacing)
 
             try:
-                self._forecast_label.place_configure(x=self._marquee_x)
-                self._forecast_label2.place_configure(x=self._marquee_x2)
+                forecast_label1.place_configure(x=self._marquee_x)
+                forecast_label2.place_configure(x=self._marquee_x2)
             except Exception:
                 pass
 

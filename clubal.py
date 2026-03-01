@@ -33,7 +33,7 @@ from core.time_utils import fmt_hhmm, parse_hhmm, split_clock_hhmm_ss
 from core.ptbr_text import formal_date_line_ptbr
 from core.card_metrics import minutes_until, remaining_progress, upcoming_progress
 from core.agenda import compute_now_next as agenda_compute_now_next
-from typing import List, Optional, Tuple, Dict
+from typing import Any, List, Optional, Tuple, Dict, cast
 
 import tkinter as tk
 import tkinter.font as tkfont
@@ -82,6 +82,42 @@ except Exception:
     Image = None
     ImageTk = None
     PIL_OK = False
+
+def _pil_image_module() -> Any:
+    if not PIL_OK or Image is None:
+        raise RuntimeError("Pillow unavailable")
+    return cast(Any, Image)
+
+
+def _pil_imagetk_module() -> Any:
+    if not PIL_OK or ImageTk is None:
+        raise RuntimeError("Pillow unavailable")
+    return cast(Any, ImageTk)
+
+
+if PIL_OK:
+    _pil_img_mod = _pil_image_module()
+    try:
+        PIL_LANCZOS = _pil_img_mod.Resampling.LANCZOS
+        PIL_NEAREST = _pil_img_mod.Resampling.NEAREST
+    except Exception:
+        PIL_LANCZOS = getattr(_pil_img_mod, "LANCZOS", 1)
+        PIL_NEAREST = getattr(_pil_img_mod, "NEAREST", 0)
+else:
+    PIL_LANCZOS = 1
+    PIL_NEAREST = 0
+
+
+def _pil_open_rgba(path: str):
+    return _pil_image_module().open(path).convert("RGBA")
+
+
+def _pil_new_rgba(size: Tuple[int, int], color: Tuple[int, int, int, int]):
+    return _pil_image_module().new("RGBA", size, color)
+
+
+def _pil_photo_image(image_obj: Any):
+    return _pil_imagetk_module().PhotoImage(image_obj)
 
 from infra.xlsx_loader import reload_classes_if_needed
 
@@ -901,13 +937,24 @@ class ClassCard(tk.Frame):
         # progress
         if self.card_kind == "AGORA":
             prog = self.data.get("progress")
-            try:
-                p = float(prog)
-            except Exception:
+            if isinstance(prog, (int, float, str)):
+                try:
+                    p = float(prog)
+                except Exception:
+                    p = 0.0
+            else:
                 p = 0.0
             self._set_progress(p, kind="AGORA")
         else:
-            self._set_progress(self.data.get("progress_upcoming", 1.0), kind="PROXIMA")
+            prog_upcoming = self.data.get("progress_upcoming", 1.0)
+            if isinstance(prog_upcoming, (int, float, str)):
+                try:
+                    p_upcoming = float(prog_upcoming)
+                except Exception:
+                    p_upcoming = 1.0
+            else:
+                p_upcoming = 1.0
+            self._set_progress(p_upcoming, kind="PROXIMA")
 
     def _set_progress(self, progress: float, kind: str) -> None:
         try:
@@ -1379,11 +1426,24 @@ class SectionFrame(tk.Frame):
         self._ensure_card_count(total)
 
         def _payload_from_row(row: Tuple):
-            if len(row) >= 8:
-                ini, fim, modalidade, prof, local, tag, prog, minsx = row[:8]
+            row_len = len(row)
+
+            ini = row[0] if row_len > 0 else ""
+            fim = row[1] if row_len > 1 else ""
+            modalidade = row[2] if row_len > 2 else ""
+            prof = row[3] if row_len > 3 else ""
+            local = row[4] if row_len > 4 else ""
+            tag = row[5] if row_len > 5 else ""
+            prog_raw = row[6] if row_len > 6 else 0.0
+            minsx = row[7] if row_len > 7 else None
+
+            if isinstance(prog_raw, (int, float, str)):
+                try:
+                    progress_value = float(prog_raw)
+                except Exception:
+                    progress_value = 0.0
             else:
-                ini, fim, modalidade, prof, local, tag, prog = row[:7]
-                minsx = None
+                progress_value = 0.0
 
             payload = {
                 "inicio": ini,
@@ -1392,14 +1452,14 @@ class SectionFrame(tk.Frame):
                 "professor": prof,
                 "local": local,
                 "tag": (tag or ""),
-                "progress": float(prog or 0.0),
+                "progress": progress_value,
             }
 
             if self._card_kind == "AGORA":
                 payload["mins_left"] = minsx
             else:
                 payload["mins_to_start"] = minsx
-                payload["progress_upcoming"] = float(prog or 0.0)
+                payload["progress_upcoming"] = progress_value
 
             return payload
 
@@ -2759,7 +2819,7 @@ class WeatherCard(tk.Frame):
     # -------------------------
 
     def _pil_cover_to_size(self, p: str, w: int, h: int):
-        im = Image.open(p).convert("RGBA")
+        im = _pil_open_rgba(p)
         iw, ih = im.size
         if iw <= 0 or ih <= 0:
             return None
@@ -2767,13 +2827,13 @@ class WeatherCard(tk.Frame):
         scale = max(w / iw, h / ih)
         nw = max(1, int(iw * scale))
         nh = max(1, int(ih * scale))
-        im = im.resize((nw, nh), Image.LANCZOS)
+        im = im.resize((nw, nh), PIL_LANCZOS)
 
         left = max(0, (nw - w) // 2)
         top = max(0, (nh - h) // 2)
         im = im.crop((left, top, left + w, top + h))
 
-        return ImageTk.PhotoImage(im)
+        return _pil_photo_image(im)
 
     def _draw_background(self, w: int, h: int):
         bg_name = "weather_day" if self.is_day_theme else "weather_night"
@@ -2811,7 +2871,7 @@ class WeatherCard(tk.Frame):
                             fx = max(1, img.width() // max(1, w))
                             fy = max(1, img.height() // max(1, h))
                             f = max(fx, fy)
-                            img = img.subsample(f, f)
+                            img = img.subsample(f)
                         self._bg_img = img
                         try:
                             log(f"[WEATHER][BG] loaded via TK orig={img.width()}x{img.height()} canvas={w}x{h}")
@@ -2863,7 +2923,7 @@ class WeatherCard(tk.Frame):
                 g = int(base_hex[2:4], 16)
                 b = int(base_hex[4:6], 16)
 
-                im = Image.new("RGBA", (w, h), (r, g, b, alpha))
+                im = _pil_new_rgba((w, h), (r, g, b, alpha))
 
                 top_boost = 22
                 bot_drop = 18
@@ -2877,8 +2937,8 @@ class WeatherCard(tk.Frame):
                     bb = max(0, min(255, bb))
                     im.putpixel((0, yy), (rr, gg, bb, alpha))
 
-                col = im.crop((0, 0, 1, h)).resize((w, h), Image.NEAREST)
-                img = ImageTk.PhotoImage(col)
+                col = im.crop((0, 0, 1, h)).resize((w, h), PIL_NEAREST)
+                img = _pil_photo_image(col)
                 self._glass_img_cache[key] = img
             except Exception:
                 img = None
@@ -3192,20 +3252,20 @@ class WeatherCard(tk.Frame):
     # -------------------------
 
     def _pil_icon_to_size(self, p: str, target: int):
-        im = Image.open(p).convert("RGBA")
+        im = _pil_open_rgba(p)
         iw, ih = im.size
         if iw <= 0 or ih <= 0:
             return None
         scale = min(target / iw, target / ih)
         nw = max(1, int(iw * scale))
         nh = max(1, int(ih * scale))
-        im = im.resize((nw, nh), Image.LANCZOS)
+        im = im.resize((nw, nh), PIL_LANCZOS)
 
-        canvas = Image.new("RGBA", (target, target), (0, 0, 0, 0))
+        canvas = _pil_new_rgba((target, target), (0, 0, 0, 0))
         x = (target - nw) // 2
         y = (target - nh) // 2
         canvas.paste(im, (x, y), im)
-        return ImageTk.PhotoImage(canvas)
+        return _pil_photo_image(canvas)
 
     def _update_icon(self, icon_path: Optional[str]):
         if not icon_path or not os.path.exists(icon_path):
@@ -3241,7 +3301,7 @@ class WeatherCard(tk.Frame):
                     fx = max(1, img.width() // max(1, target))
                     fy = max(1, img.height() // max(1, target))
                     f = max(fx, fy)
-                    img = img.subsample(f, f)
+                    img = img.subsample(f)
                 self._icon_img = img
         except Exception:
             self._icon_img = None
@@ -3287,9 +3347,10 @@ class WeatherCard(tk.Frame):
 
         # cancel redraw
         try:
-            if getattr(self, "_redraw_after", None) is not None:
+            redraw_after = getattr(self, "_redraw_after", None)
+            if redraw_after is not None:
                 try:
-                    self.after_cancel(self._redraw_after)
+                    self.after_cancel(redraw_after)
                 except Exception:
                     pass
             self._redraw_after = None
@@ -3298,9 +3359,10 @@ class WeatherCard(tk.Frame):
 
         # cleanup forecast
         try:
-            if getattr(self, "_forecast_win_id", None) is not None:
+            forecast_win_id = getattr(self, "_forecast_win_id", None)
+            if forecast_win_id is not None:
                 try:
-                    self.canvas.delete(self._forecast_win_id)
+                    self.canvas.delete(forecast_win_id)
                 except Exception:
                     pass
             self._forecast_win_id = None
@@ -3308,9 +3370,10 @@ class WeatherCard(tk.Frame):
             pass
 
         try:
-            if getattr(self, "_forecast_label", None) is not None:
+            forecast_label = getattr(self, "_forecast_label", None)
+            if forecast_label is not None:
                 try:
-                    self._forecast_label.destroy()
+                    forecast_label.destroy()
                 except Exception:
                     pass
             self._forecast_label = None
@@ -3318,9 +3381,10 @@ class WeatherCard(tk.Frame):
             pass
 
         try:
-            if getattr(self, "_forecast_label2", None) is not None:
+            forecast_label2 = getattr(self, "_forecast_label2", None)
+            if forecast_label2 is not None:
                 try:
-                    self._forecast_label2.destroy()
+                    forecast_label2.destroy()
                 except Exception:
                     pass
             self._forecast_label2 = None
@@ -3328,9 +3392,10 @@ class WeatherCard(tk.Frame):
             pass
 
         try:
-            if getattr(self, "_forecast_frame", None) is not None:
+            forecast_frame = getattr(self, "_forecast_frame", None)
+            if forecast_frame is not None:
                 try:
-                    self._forecast_frame.destroy()
+                    forecast_frame.destroy()
                 except Exception:
                     pass
             self._forecast_frame = None
@@ -3339,9 +3404,10 @@ class WeatherCard(tk.Frame):
 
         # cleanup top marquee
         try:
-            if getattr(self, "_tmarquee_win_id", None) is not None:
+            tmarquee_win_id = getattr(self, "_tmarquee_win_id", None)
+            if tmarquee_win_id is not None:
                 try:
-                    self.canvas.delete(self._tmarquee_win_id)
+                    self.canvas.delete(tmarquee_win_id)
                 except Exception:
                     pass
             self._tmarquee_win_id = None
@@ -3349,9 +3415,10 @@ class WeatherCard(tk.Frame):
             pass
 
         try:
-            if getattr(self, "_tmarquee_label1", None) is not None:
+            tmarquee_label1 = getattr(self, "_tmarquee_label1", None)
+            if tmarquee_label1 is not None:
                 try:
-                    self._tmarquee_label1.destroy()
+                    tmarquee_label1.destroy()
                 except Exception:
                     pass
             self._tmarquee_label1 = None
@@ -3359,9 +3426,10 @@ class WeatherCard(tk.Frame):
             pass
 
         try:
-            if getattr(self, "_tmarquee_label2", None) is not None:
+            tmarquee_label2 = getattr(self, "_tmarquee_label2", None)
+            if tmarquee_label2 is not None:
                 try:
-                    self._tmarquee_label2.destroy()
+                    tmarquee_label2.destroy()
                 except Exception:
                     pass
             self._tmarquee_label2 = None
@@ -3369,9 +3437,10 @@ class WeatherCard(tk.Frame):
             pass
 
         try:
-            if getattr(self, "_tmarquee_frame", None) is not None:
+            tmarquee_frame = getattr(self, "_tmarquee_frame", None)
+            if tmarquee_frame is not None:
                 try:
-                    self._tmarquee_frame.destroy()
+                    tmarquee_frame.destroy()
                 except Exception:
                     pass
             self._tmarquee_frame = None
@@ -3536,7 +3605,7 @@ class ClubalApp(tk.Tk):
         Resize tipo 'CONTAIN' (encaixa sem cortar), centralizado, mantendo transparência.
         Retorna PhotoImage (PIL).
         """
-        im = Image.open(path).convert("RGBA")
+        im = _pil_open_rgba(path)
         iw, ih = im.size
         if iw <= 0 or ih <= 0:
             return None
@@ -3544,14 +3613,14 @@ class ClubalApp(tk.Tk):
         scale = min(w / iw, h / ih)
         nw = max(1, int(iw * scale))
         nh = max(1, int(ih * scale))
-        im = im.resize((nw, nh), Image.LANCZOS)
+        im = im.resize((nw, nh), PIL_LANCZOS)
 
-        canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        canvas = _pil_new_rgba((w, h), (0, 0, 0, 0))
         x = (w - nw) // 2
         y = (h - nh) // 2
         canvas.paste(im, (x, y), im)
 
-        return ImageTk.PhotoImage(canvas)
+        return _pil_photo_image(canvas)
 
     def _refresh_logo(self):
         """
@@ -3565,7 +3634,7 @@ class ClubalApp(tk.Tk):
 
         if not p or not os.path.exists(p):
             if hasattr(self, "logo_lbl"):
-                self.logo_lbl.configure(image=None)
+                self.logo_lbl.configure(image="")
             return
 
         try:
@@ -3595,7 +3664,7 @@ class ClubalApp(tk.Tk):
                 fy = max(1, (tkimg.height() + target_h - 1) // target_h) if tkimg.height() > target_h else 1
                 f = max(fx, fy)
                 if f > 1:
-                    tkimg = tkimg.subsample(f, f)
+                    tkimg = tkimg.subsample(f)
                 img = tkimg
 
             self.logo_img = img
@@ -3603,7 +3672,7 @@ class ClubalApp(tk.Tk):
 
         except Exception:
             if hasattr(self, "logo_lbl"):
-                self.logo_lbl.configure(image=None)
+                self.logo_lbl.configure(image="")
 
     def _refresh_client_logo(self):
         """
@@ -3616,7 +3685,7 @@ class ClubalApp(tk.Tk):
 
             if not p:
                 if hasattr(self, "client_logo_lbl"):
-                    self.client_logo_lbl.configure(image=None)
+                    self.client_logo_lbl.configure(image="")
                 return
 
             target_w = 320
@@ -3645,7 +3714,7 @@ class ClubalApp(tk.Tk):
                 fy = max(1, (tkimg.height() + target_h - 1) // target_h) if tkimg.height() > target_h else 1
                 f = max(fx, fy)
                 if f > 1:
-                    tkimg = tkimg.subsample(f, f)
+                    tkimg = tkimg.subsample(f)
                 img = tkimg
 
             self.client_logo_img = img
@@ -3654,7 +3723,7 @@ class ClubalApp(tk.Tk):
 
         except Exception:
             if hasattr(self, "client_logo_lbl"):
-                self.client_logo_lbl.configure(image=None)
+                self.client_logo_lbl.configure(image="")
 
     def _build_datecard_candidates_ptbr(self) -> List[str]:
         return build_datecard_candidates_ptbr()
@@ -3944,7 +4013,7 @@ class ClubalApp(tk.Tk):
         self.clubal_slot.grid_propagate(False)
 
         self.logo_img = None
-        self.logo_lbl = tk.Label(self.clubal_slot, image=None, bg=header_fill)
+        self.logo_lbl = tk.Label(self.clubal_slot, bg=header_fill)
         self.logo_lbl.place(relx=0.5, rely=0.5, anchor="center")
 
         self.client_slot = tk.Frame(self.logos_row, bg=header_fill, height=LOGOS_ROW_H)
@@ -3952,7 +4021,7 @@ class ClubalApp(tk.Tk):
         self.client_slot.grid_propagate(False)
 
         self.client_logo_img = None
-        self.client_logo_lbl = tk.Label(self.client_slot, image=None, bg=header_fill)
+        self.client_logo_lbl = tk.Label(self.client_slot, bg=header_fill)
         self.client_logo_lbl.place(relx=0.5, rely=0.5, anchor="center")
 
         if self.DEBUG_LAYOUT:
@@ -4032,8 +4101,13 @@ class ClubalApp(tk.Tk):
                         font=self.f_date_line
                     )
                 else:
-                    self.datecard_canvas.coords(self._date_shadow_id, (w // 2) + 1, (h // 2) + 1)
-                    self.datecard_canvas.coords(self._date_text_id, w // 2, h // 2)
+                    shadow_id = self._date_shadow_id
+                    text_id = self._date_text_id
+
+                    if shadow_id is not None:
+                        self.datecard_canvas.coords(shadow_id, (w // 2) + 1, (h // 2) + 1)
+                    if text_id is not None:
+                        self.datecard_canvas.coords(text_id, w // 2, h // 2)
 
             except Exception:
                 pass

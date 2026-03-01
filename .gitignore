@@ -5,3 +5,4 @@ __pycache__/
 .env
 _data/
 _runtime_link/
+grade.xlsx

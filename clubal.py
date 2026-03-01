@@ -22,6 +22,7 @@ import traceback
 import threading
 from dataclasses import dataclass
 from core.models import ClassItem
+from core.date_text import date_time_strings, today_3letters_noaccent, weekday_full_noaccent
 from typing import List, Optional, Tuple, Dict
 
 import tkinter as tk
@@ -413,32 +414,6 @@ def parse_hhmm(v: object) -> Optional[int]:
         return None
     except Exception:
         return None
-
-def today_3letters_noaccent() -> str:
-    wd = time.localtime().tm_wday  # Monday=0
-    return ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"][wd]
-
-
-def weekday_full_noaccent() -> str:
-    wd = time.localtime().tm_wday
-    return [
-        "SEGUNDA-FEIRA",
-        "TERCA-FEIRA",
-        "QUARTA-FEIRA",
-        "QUINTA-FEIRA",
-        "SEXTA-FEIRA",
-        "SABADO",
-        "DOMINGO",
-    ][wd]
-
-
-def date_time_strings() -> Tuple[str, str, str]:
-    lt = time.localtime()
-    date_s = time.strftime("%d/%m/%Y", lt)
-    time_s = time.strftime("%H:%M:%S", lt)  # ✅ com segundos
-    wd_s = weekday_full_noaccent()
-    return date_s, time_s, wd_s
-
 
 def _split_clock_hhmm_ss(t: str) -> Tuple[str, str]:
     """

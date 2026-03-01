@@ -6,3 +6,5 @@ __pycache__/
 _data/
 _runtime_link/
 grade.xlsx
+*.zip
+clubal.zip

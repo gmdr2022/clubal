@@ -33,7 +33,8 @@ from core.ptbr_text import (
     weekday_full_ptbr,
     weekday_short_ptbr,
 )
-
+from core.card_metrics import minutes_until, remaining_progress, upcoming_progress
+from core.agenda import item_interval_debug
 from typing import List, Optional, Tuple, Dict
 
 import tkinter as tk
@@ -4350,24 +4351,39 @@ class ClubalApp(tk.Tk):
     # Agenda compute
     # -------------------------
     def _compute_now_next(self) -> Tuple[List[Tuple], List[Tuple]]:
-        from datetime import datetime
-
-        from core.agenda import compute_now_next
-
         now_dt = datetime.now()
         window_end = now_dt + timedelta(minutes=120)
-
-        now_rows, next_rows, discard_day, discard_time, discard_other = compute_now_next(
-            now_dt=now_dt,
-            all_items=self.all_items,
-            window_minutes=120,
-            log_fn=log,
-        )
 
         now_list = []
         next_list = []
 
-        for it, start_dt, end_dt in now_rows:
+        discard_day = 0
+        discard_time = 0
+        discard_other = 0
+
+        for it in self.all_items:
+            interval, reason = item_interval_debug(now_dt, it, log_fn=log)
+            if not interval:
+                if reason == "invalid_day":
+                    discard_day += 1
+                elif reason == "invalid_time":
+                    discard_time += 1
+                else:
+                    discard_other += 1
+
+                if getattr(self, "DEBUG_AGENDA", False):
+                    try:
+                        log(
+                            f"[AGENDA][DROP] reason={reason} "
+                            f"item=({it.day} {it.start}->{it.end} {it.modalidade} tag={it.tag}) "
+                            f"now={now_dt.strftime('%Y-%m-%d %H:%M:%S')}"
+                        )
+                    except Exception:
+                        pass
+                continue
+
+            start_dt, end_dt = interval
+
             if getattr(self, "DEBUG_AGENDA", False):
                 try:
                     log(
@@ -4380,83 +4396,43 @@ class ClubalApp(tk.Tk):
                 except Exception:
                     pass
 
-            total = (end_dt - start_dt).total_seconds()
-            done = (now_dt - start_dt).total_seconds()
+            if start_dt <= now_dt < end_dt:
+                progress = remaining_progress(now_dt, start_dt, end_dt)
+                mins_left = minutes_until(now_dt, end_dt)
 
-            if total <= 0:
-                progress = 0.0
-            else:
-                remaining = total - done
-                progress = remaining / total
-                progress = max(0.0, min(1.0, progress))
-
-            mins_left = int(
-                max(
-                    0,
-                    round((end_dt - now_dt).total_seconds() / 60.0)
-                )
-            )
-
-            now_list.append(
-                (
-                    it.start,
-                    it.end,
-                    it.modalidade,
-                    it.professor,
-                    "",
-                    it.tag,
-                    progress,
-                    mins_left,
-                    end_dt,
-                    start_dt,
-                )
-            )
-
-        for it, start_dt, end_dt in next_rows:
-            if getattr(self, "DEBUG_AGENDA", False):
-                try:
-                    log(
-                        "[AGENDA][INT] "
-                        f"item=({it.day} {it.start}->{it.end} {it.modalidade} tag={it.tag}) "
-                        f"base_now={now_dt.strftime('%Y-%m-%d %H:%M:%S')} "
-                        f"start={start_dt.strftime('%Y-%m-%d %H:%M:%S')} "
-                        f"end={end_dt.strftime('%Y-%m-%d %H:%M:%S')}"
+                now_list.append(
+                    (
+                        it.start,
+                        it.end,
+                        it.modalidade,
+                        it.professor,
+                        "",
+                        it.tag,
+                        progress,
+                        mins_left,
+                        end_dt,
+                        start_dt,
                     )
-                except Exception:
-                    pass
-
-            total_win = (window_end - now_dt).total_seconds()
-            remaining = (start_dt - now_dt).total_seconds()
-
-            if total_win <= 0:
-                progress_next = 0.0
-            else:
-                progress_next = remaining / total_win
-                progress_next = max(0.0, min(1.0, progress_next))
-
-            progress_next = max(0.02, progress_next)
-
-            mins_to_start = int(
-                max(
-                    0,
-                    round((start_dt - now_dt).total_seconds() / 60.0)
                 )
-            )
 
-            next_list.append(
-                (
-                    it.start,
-                    it.end,
-                    it.modalidade,
-                    it.professor,
-                    "",
-                    it.tag,
-                    progress_next,
-                    mins_to_start,
-                    end_dt,
-                    start_dt,
+            elif now_dt <= start_dt <= window_end:
+                progress_next = upcoming_progress(now_dt, start_dt, window_end)
+                mins_to_start = minutes_until(now_dt, start_dt)
+
+                next_list.append(
+                    (
+                        it.start,
+                        it.end,
+                        it.modalidade,
+                        it.professor,
+                        "",
+                        it.tag,
+                        progress_next,
+                        mins_to_start,
+                        end_dt,
+                        start_dt,
+                    )
                 )
-            )
 
         now_list.sort(key=lambda t: t[8])
         next_list.sort(key=lambda t: t[9])

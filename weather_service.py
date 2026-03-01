@@ -52,6 +52,105 @@ __all__ = [
     "get_place_display",
 ]
 
+def _migrate_legacy_weather_storage(app_dir: str, logger=None) -> None:
+    """
+    Migra layout antigo (se existir) para o padrão definitivo:
+
+    Antigos (legado):
+      <CACHE_ROOT>/weather_cache.json
+      <CACHE_ROOT>/weather_icons/
+      <CACHE_ROOT>/cache_old/
+      <CACHE_ROOT>/weather/weather_cache.json  (se já existir, não mexe)
+
+    Novo (padrão):
+      <CACHE_ROOT>/weather/weather_cache.json
+      <CACHE_ROOT>/weather/weather_icons/
+      <CACHE_ROOT>/weather/cache_old/
+    """
+    try:
+        # Se não temos cache gravável, não migra nada
+        if _PATHS.cache_dir is None:
+            return
+
+        cache_root = str(_PATHS.cache_dir)  # <CACHE_ROOT>
+        new_root = _cache_root(app_dir)     # <CACHE_ROOT>/weather
+        if not new_root:
+            return
+
+        new_cache = os.path.join(new_root, "weather_cache.json")
+        new_icons = os.path.join(new_root, ICONS_DIRNAME)  # weather_icons
+        new_archive = os.path.join(new_root, CACHE_ARCHIVE_DIRNAME)  # cache_old
+
+        _safe_mkdir(new_icons)
+        _safe_mkdir(new_archive)
+
+        # 1) mover weather_cache.json solto para dentro de /weather/
+        old_cache = os.path.join(cache_root, "weather_cache.json")
+        if (not os.path.exists(new_cache)) and os.path.exists(old_cache):
+            try:
+                os.replace(old_cache, new_cache)
+                if logger:
+                    logger(f"[WEATHER] Migrated legacy cache -> {new_cache}")
+            except Exception as e:
+                if logger:
+                    logger(f"[WEATHER] Legacy cache migrate failed {type(e).__name__}: {e}")
+
+        # 2) mover weather_icons/ solto para dentro de /weather/weather_icons/
+        old_icons = os.path.join(cache_root, ICONS_DIRNAME)
+        if os.path.isdir(old_icons):
+            try:
+                for name in os.listdir(old_icons):
+                    src = os.path.join(old_icons, name)
+                    dst = os.path.join(new_icons, name)
+                    if not os.path.isfile(src):
+                        continue
+                    if os.path.exists(dst):
+                        continue
+                    try:
+                        os.replace(src, dst)
+                    except Exception:
+                        pass
+                # tenta remover pasta antiga se ficou vazia
+                try:
+                    if not os.listdir(old_icons):
+                        os.rmdir(old_icons)
+                except Exception:
+                    pass
+                if logger:
+                    logger(f"[WEATHER] Migrated legacy icons -> {new_icons}")
+            except Exception as e:
+                if logger:
+                    logger(f"[WEATHER] Legacy icons migrate failed {type(e).__name__}: {e}")
+
+        # 3) mover cache_old/ solto para dentro de /weather/cache_old/
+        old_archive = os.path.join(cache_root, CACHE_ARCHIVE_DIRNAME)
+        if os.path.isdir(old_archive):
+            try:
+                for name in os.listdir(old_archive):
+                    src = os.path.join(old_archive, name)
+                    dst = os.path.join(new_archive, name)
+                    if not os.path.isfile(src):
+                        continue
+                    if os.path.exists(dst):
+                        continue
+                    try:
+                        os.replace(src, dst)
+                    except Exception:
+                        pass
+                # tenta remover pasta antiga se ficou vazia
+                try:
+                    if not os.listdir(old_archive):
+                        os.rmdir(old_archive)
+                except Exception:
+                    pass
+                if logger:
+                    logger(f"[WEATHER] Migrated legacy archive -> {new_archive}")
+            except Exception as e:
+                if logger:
+                    logger(f"[WEATHER] Legacy archive migrate failed {type(e).__name__}: {e}")
+
+    except Exception:
+        pass
 
 # ============================================================
 # config (fonte única de verdade local – pode virar arquivo depois)
@@ -154,13 +253,14 @@ def _cache_root(app_dir: str) -> Optional[str]:
     """
     Raiz gravável para cache do weather_service.
 
-    NOVA REGRA (core/paths):
-    - Se houver paths graváveis (installed ou portable), usa:
-        <writable_root>/cache/weather/
-    - Se não houver permissão de escrita (TV/pendrive bloqueado), retorna None.
-    """
-    _ = app_dir  # mantido por compatibilidade de assinatura
+    Padrão definitivo:
+      <CACHE_ROOT>/weather/
 
+    Onde <CACHE_ROOT> vem do core/paths (installed/portable) ou None se não gravável.
+    """
+    _ = app_dir  # compat
+
+    # Tudo do weather vive dentro do subdir "weather"
     p = cache_subdir(_PATHS, "weather")
     if p is None:
         return None
@@ -168,28 +268,33 @@ def _cache_root(app_dir: str) -> Optional[str]:
 
 
 def _cache_paths(app_dir: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Retorna:
+      - current cache JSON: <CACHE_ROOT>/weather/weather_cache.json
+      - archive dir:        <CACHE_ROOT>/weather/cache_old/
+    """
     root = _cache_root(app_dir)
     if not root:
         return None, None
 
     current = os.path.join(root, "weather_cache.json")
-    archive = os.path.join(root, CACHE_ARCHIVE_DIRNAME)
+    archive = os.path.join(root, CACHE_ARCHIVE_DIRNAME)  # "cache_old"
     _safe_mkdir(archive)
     return current, archive
 
 
 def _icons_dir(app_dir: str) -> Optional[str]:
     """
-    Ícones ficam direto em:
-      <writable_root>/package/weather_icons/
-    (sem subpasta "weather/"), para evitar duplicação.
+    Ícones oficiais (PNG) cacheados em:
+      <CACHE_ROOT>/weather/weather_icons/
     """
-    _ = app_dir  # compat
-
-    p = cache_subdir(_PATHS, ICONS_DIRNAME)
-    if p is None:
+    root = _cache_root(app_dir)
+    if not root:
         return None
-    return str(p)
+
+    p = os.path.join(root, ICONS_DIRNAME)  # "weather_icons"
+    _safe_mkdir(p)
+    return p
 
 def _archive_existing_cache(current_path: str, archive_dir: str, logger=None) -> None:
     try:
@@ -476,6 +581,8 @@ def get_official_icon_png_path(
       2) se não existir, baixa do CDN (metno/weathericons) e salva
       3) se falhar, retorna None
     """
+    
+    _migrate_legacy_weather_storage(app_dir, logger=logger)
     
     icons_dir = _icons_dir(app_dir)
     if not icons_dir:
@@ -996,6 +1103,7 @@ def get_weather(
     logger=None,
 ) -> WeatherResult:
     current_cache_path, archive_dir = _cache_paths(app_dir)
+    _migrate_legacy_weather_storage(app_dir, logger=logger)    
     now_hour = time.localtime().tm_hour
 
     use_lat = float(lat) if lat is not None else float(WEATHER_LAT)

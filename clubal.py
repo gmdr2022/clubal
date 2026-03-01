@@ -1714,9 +1714,10 @@ class HoursCard(tk.Frame):
       - tick_rotate()
     """
 
-    def __init__(self, master, is_day_theme: bool):
+    def __init__(self, master, is_day_theme: bool, ctx=None):
         super().__init__(master, bd=0, highlightthickness=0)
         self.is_day_theme = is_day_theme
+        self.ctx = ctx
 
         try:
             self.configure(bg=master["bg"])
@@ -2237,6 +2238,7 @@ class WeatherCard(tk.Frame):
     def __init__(self, master, is_day_theme: bool):
         super().__init__(master, bd=0, highlightthickness=0)
         self.is_day_theme = is_day_theme
+        self.ctx = globals().get("ctx", None)
 
         try:
             self.configure(bg=master["bg"])
@@ -2753,11 +2755,21 @@ class WeatherCard(tk.Frame):
     def _icon_worker(self, symbol_code: Optional[str], is_day: bool):
         icon_path = None
 
+        # ctx pode não existir em alguns cenários (refactors / init parcial)
+        ctx_obj = getattr(self, "ctx", None)
+        app_dir = ""
+        try:
+            if ctx_obj is not None and getattr(ctx_obj, "paths", None) is not None:
+                if getattr(ctx_obj.paths, "app_dir", None) is not None:
+                    app_dir = str(ctx_obj.paths.app_dir)
+        except Exception:
+            app_dir = ""
+
         try:
             icon_path = weather_mod.get_official_icon_png_path(
                 symbol_code=symbol_code,
                 is_day=is_day,
-                app_dir=str(self.ctx.paths.app_dir),
+                app_dir=app_dir,
                 logger=log,
                 user_agent="CLUBAL-AgendaLive/2.0 (contact: local)",
             )

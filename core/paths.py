@@ -155,7 +155,8 @@ def build_paths(env: Environment) -> Paths:
 
 def cache_subdir(paths: Paths, name: str) -> Path | None:
     """
-    Subpastas dentro do 'package' (ex.: cache_old, weather_icons, etc.)
+    Cria/retorna uma subpasta dentro do cache_dir gravável (installed/portable).
+    Ex.: cache_subdir(paths, "weather") -> <CACHE_ROOT>/weather
     """
     if paths.cache_dir is None:
         return None

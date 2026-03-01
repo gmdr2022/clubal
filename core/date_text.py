@@ -52,13 +52,13 @@ def build_datecard_candidates_ptbr() -> List[str]:
     yy = lt.tm_year
 
     cands = [
-        f"{wd_full}  •  {dd} de {mm_full} de {yy}",
-        f"{wd_title}  •  {dd} de {mm_full} de {yy}",
-        f"{wd_short}  •  {dd} de {mm_full} de {yy}",
-        f"{wd_short}  •  {dd} de {mm_abbr} de {yy}",
-        f"{wd_short}  •  {dd} de {mm_abbr}",
-        f"{wd_abbr}  •  {dd} de {mm_abbr}",
-        f"{wd_abbr}  •  {dd} {mm_abbr}",
+        f"{wd_full} • {dd} de {mm_full} de {yy}",
+        f"{wd_title} • {dd} de {mm_full} de {yy}",
+        f"{wd_short} • {dd} de {mm_full} de {yy}",
+        f"{wd_short} • {dd} de {mm_abbr} de {yy}",
+        f"{wd_short} • {dd} de {mm_abbr}",
+        f"{wd_abbr} • {dd} de {mm_abbr}",
+        f"{wd_abbr} • {dd} {mm_abbr}",
         f"{wd_abbr} {dd} {mm_abbr}",
     ]
 

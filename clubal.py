@@ -21,6 +21,7 @@ import time
 import traceback
 import threading
 from dataclasses import dataclass
+from core.models import ClassItem
 from typing import List, Optional, Tuple, Dict
 
 import tkinter as tk
@@ -343,19 +344,6 @@ def _selftest_geometry(logger=log) -> None:
             logger(f"[SELFTEST] Exception {type(e).__name__}: {e}")
         except Exception:
             pass
-
-# -------------------------
-# Data model
-# -------------------------
-
-@dataclass
-class ClassItem:
-    day: str          # SEG TER QUA QUI SEX SAB DOM
-    start: str        # HH:MM
-    end: str          # HH:MM
-    modalidade: str   # coluna D
-    professor: str    # coluna E
-    tag: str          # coluna F (MENOR/GERAL/...)
 
 # -------------------------
 # Time parsing helpers (tolerante)

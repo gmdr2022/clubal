@@ -22,17 +22,15 @@ import traceback
 import threading
 from dataclasses import dataclass
 from core.models import ClassItem
-from core.date_text import date_time_strings, today_3letters_noaccent, weekday_full_noaccent
+from core.date_text import (
+    build_datecard_candidates_ptbr,
+    date_time_strings,
+    today_3letters_noaccent,
+    weekday_full_noaccent,
+)
 from core.time_utils import fmt_hhmm, parse_hhmm, split_clock_hhmm_ss
 
-from core.ptbr_text import (
-    formal_date_line_ptbr,
-    month_abbr_ptbr,
-    month_name_ptbr,
-    weekday_abbr_ptbr,
-    weekday_full_ptbr,
-    weekday_short_ptbr,
-)
+from core.ptbr_text import formal_date_line_ptbr
 from core.card_metrics import minutes_until, remaining_progress, upcoming_progress
 from core.agenda import compute_now_next as agenda_compute_now_next
 from typing import List, Optional, Tuple, Dict
@@ -3659,36 +3657,7 @@ class ClubalApp(tk.Tk):
                 self.client_logo_lbl.configure(image=None)
 
     def _build_datecard_candidates_ptbr(self) -> List[str]:
-        lt = time.localtime()
-
-        wd_full = weekday_full_ptbr()          # ex: QUARTA-FEIRA
-        wd_title = wd_full.title()             # ex: Quarta-Feira
-        wd_short = weekday_short_ptbr()        # ex: Quarta
-        wd_abbr = weekday_abbr_ptbr()          # ex: Qua
-
-        dd = lt.tm_mday
-        mm_full = month_name_ptbr(lt.tm_mon)   # ex: Fevereiro
-        mm_abbr = month_abbr_ptbr(lt.tm_mon)   # ex: Fev
-        yy = lt.tm_year
-
-        cands = [
-            f"{wd_full}  •  {dd} de {mm_full} de {yy}",
-            f"{wd_title}  •  {dd} de {mm_full} de {yy}",
-            f"{wd_short}  •  {dd} de {mm_full} de {yy}",
-            f"{wd_short}  •  {dd} de {mm_abbr} de {yy}",
-            f"{wd_short}  •  {dd} de {mm_abbr}",
-            f"{wd_abbr}  •  {dd} de {mm_abbr}",
-            f"{wd_abbr}  •  {dd} {mm_abbr}",
-            f"{wd_abbr} {dd} {mm_abbr}",
-        ]
-
-        seen = set()
-        out = []
-        for s in cands:
-            if s not in seen:
-                seen.add(s)
-                out.append(s)
-        return out
+        return build_datecard_candidates_ptbr()
 
     def _ellipsis_to_fit(self, text: str, font_obj: tkfont.Font, max_w: int) -> str:
         if max_w <= 8:

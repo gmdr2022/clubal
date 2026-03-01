@@ -2429,41 +2429,31 @@ class WeatherCard(tk.Frame):
         if not candidates:
             return None
 
-        roots = []
+        weather_icons_dir = None
 
         try:
-            cache_dir = getattr(self.ctx.paths, "cache_dir", None)
-            if cache_dir:
-                roots.append(os.path.join(str(cache_dir), "weather_icons"))
-                roots.append(os.path.join(str(cache_dir), "weather", "weather_icons"))
+            ctx = getattr(self, "ctx", None)
+            paths = getattr(ctx, "paths", None) if ctx is not None else None
+            cache_dir = getattr(paths, "cache_dir", None) if paths is not None else None
+
+            if cache_dir is not None:
+                weather_icons_dir = os.path.join(
+                    str(cache_dir),
+                    "weather",
+                    "weather_icons",
+                )
         except Exception:
-            pass
+            weather_icons_dir = None
 
-        try:
-            la = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
-            if la:
-                roots.append(os.path.join(la, "CLUBAL", "cache", "weather", "weather_icons"))
-                roots.append(os.path.join(la, "CLUBAL_Agenda_Live", "package", "weather_icons"))
-        except Exception:
-            pass
+        if not weather_icons_dir or not os.path.isdir(weather_icons_dir):
+            return None
 
-        seen = set()
-        final_roots = []
-        for root in roots:
-            if root and root not in seen:
-                seen.add(root)
-                final_roots.append(root)
+        for code in candidates:
+            p = os.path.join(weather_icons_dir, f"{code}.png")
+            if os.path.exists(p):
+                return p
 
-        for root in final_roots:
-            if not os.path.isdir(root):
-                continue
-
-            for code in candidates:
-                p = os.path.join(root, f"{code}.png")
-                if os.path.exists(p):
-                    return p
-
-        return None    
+        return None
 
     # -------------------------
     # TOP marquee (status direita) — CLIP REAL

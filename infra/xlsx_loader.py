@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import List, Optional
+import os
+from typing import Callable, List, Optional, Tuple
 
 from openpyxl import load_workbook
 
@@ -70,3 +71,32 @@ def load_classes_from_excel(path: str, sheet_name: str = DEFAULT_SHEET_NAME) -> 
         items.append(ClassItem(dia, ini, fim, modalidade, professor, tag))
 
     return items
+
+
+def reload_classes_if_needed(
+    path: str,
+    current_items: List[ClassItem],
+    previous_mtime: Optional[float],
+    *,
+    force: bool = False,
+    sheet_name: str = DEFAULT_SHEET_NAME,
+    logger: Optional[Callable[[str], None]] = None,
+) -> Tuple[List[ClassItem], Optional[float], bool]:
+    try:
+        mtime = os.path.getmtime(path)
+
+        if not force and previous_mtime is not None and mtime == previous_mtime:
+            return current_items, previous_mtime, False
+
+        items = load_classes_from_excel(path, sheet_name=sheet_name)
+
+        if logger:
+            logger(f"[XLSX] Excel carregado: {len(items)} itens. mtime={mtime}")
+
+        return items, mtime, True
+
+    except Exception as e:
+        if logger:
+            logger(f"[XLSX] Falha ao carregar Excel: {type(e).__name__}: {e}")
+
+        return current_items, previous_mtime, False

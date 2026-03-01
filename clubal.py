@@ -85,7 +85,7 @@ except Exception:
     ImageTk = None
     PIL_OK = False
 
-from infra.xlsx_loader import load_classes_from_excel
+from infra.xlsx_loader import reload_classes_if_needed
 
 import weather_service as weather_mod
 
@@ -4337,15 +4337,13 @@ class ClubalApp(tk.Tk):
     # Excel reload
     # -------------------------
     def _reload_excel_if_needed(self, force: bool = False):
-        try:
-            mtime = os.path.getmtime(EXCEL_PATH)
-            if force or self.last_excel_mtime is None or mtime != self.last_excel_mtime:
-                items = load_classes_from_excel(EXCEL_PATH)
-                self.all_items = items
-                self.last_excel_mtime = mtime
-                log(f"[XLSX] Excel carregado: {len(self.all_items)} itens. mtime={mtime}")
-        except Exception as e:
-            log(f"[XLSX] Falha ao carregar Excel: {type(e).__name__}: {e}")
+        self.all_items, self.last_excel_mtime, _changed = reload_classes_if_needed(
+            EXCEL_PATH,
+            self.all_items,
+            self.last_excel_mtime,
+            force=force,
+            logger=log,
+        )
 
     # -------------------------
     # Agenda compute

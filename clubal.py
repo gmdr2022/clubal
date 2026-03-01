@@ -23,6 +23,7 @@ import threading
 from dataclasses import dataclass
 from core.models import ClassItem
 from core.date_text import date_time_strings, today_3letters_noaccent, weekday_full_noaccent
+from core.time_utils import fmt_hhmm, parse_hhmm, split_clock_hhmm_ss
 from typing import List, Optional, Tuple, Dict
 
 import tkinter as tk
@@ -345,103 +346,6 @@ def _selftest_geometry(logger=log) -> None:
             logger(f"[SELFTEST] Exception {type(e).__name__}: {e}")
         except Exception:
             pass
-
-# -------------------------
-# Time parsing helpers (tolerante)
-# -------------------------
-
-def parse_hhmm(v: object) -> Optional[int]:
-    """
-    Aceita:
-    - "HH:MM"
-    - "HH:MM:SS"
-    - datetime.time / datetime.datetime
-    - float/int do Excel (fração do dia), ex: 0.5 = 12:00, 0.958333 = 23:00
-      (se vier número grande, usa apenas a parte fracionária)
-    Retorna minutos desde 00:00 (0..1439)
-    """
-    try:
-        if v is None:
-            return None
-
-        # datetime/time objects (openpyxl às vezes retorna assim)
-        if hasattr(v, "hour") and hasattr(v, "minute"):
-            try:
-                hh = int(getattr(v, "hour"))
-                mm = int(getattr(v, "minute"))
-                if 0 <= hh <= 23 and 0 <= mm <= 59:
-                    return hh * 60 + mm
-            except Exception:
-                pass
-
-        # Excel numeric time (float/int)
-        if isinstance(v, (int, float)):
-            f = float(v)
-            # usa só fração do dia (caso venha com data+hora)
-            frac = f % 1.0
-            if frac < 0:
-                frac = -frac
-            mins = int(round(frac * 24.0 * 60.0))
-            mins = mins % (24 * 60)
-            return mins
-
-        s = str(v).strip()
-        if not s:
-            return None
-
-        # Se não tem ":", tenta interpretar como número (string do Excel)
-        if ":" not in s:
-            try:
-                f = float(s.replace(",", "."))
-                frac = f % 1.0
-                if frac < 0:
-                    frac = -frac
-                mins = int(round(frac * 24.0 * 60.0))
-                mins = mins % (24 * 60)
-                return mins
-            except Exception:
-                return None
-
-        parts = s.split(":")
-        if len(parts) < 2:
-            return None
-
-        hh = int(parts[0])
-        mm = int(parts[1])
-
-        if 0 <= hh <= 23 and 0 <= mm <= 59:
-            return hh * 60 + mm
-        return None
-    except Exception:
-        return None
-
-def _split_clock_hhmm_ss(t: str) -> Tuple[str, str]:
-    """
-    Recebe "HH:MM:SS" e devolve ("HH:MM", "SS").
-    Fallback seguro se vier algo diferente.
-    """
-    try:
-        s = str(t).strip()
-        if len(s) >= 8 and s[2] == ":" and s[5] == ":":
-            return s[:5], s[6:8]
-        parts = s.split(":")
-        if len(parts) >= 3:
-            return f"{parts[0]:0>2}:{parts[1]:0>2}", f"{parts[2]:0>2}"[:2]
-        if len(parts) == 2:
-            return f"{parts[0]:0>2}:{parts[1]:0>2}", "00"
-        return s[:5], "00"
-    except Exception:
-        return "00:00", "00"
-
-
-def fmt_hhmm(mins: Optional[int]) -> str:
-    if mins is None:
-        return "—"
-    hh = mins // 60
-    mm = mins % 60
-    if mm == 0:
-        return f"{hh:02d}H"
-    return f"{hh:02d}:{mm:02d}"
 
 # -------------------------
 # Excel path (loader lives in infra.xlsx_loader)
@@ -4707,7 +4611,7 @@ class ClubalApp(tk.Tk):
             self._update_datecard_text_adaptive()
 
             # Relógio (HH:MM + :SS)
-            hhmm, ss = _split_clock_hhmm_ss(t)
+            hhmm, ss = split_clock_hhmm_ss(t)
             if hasattr(self, "time_hhmm_lbl"):
                 self.time_hhmm_lbl.configure(text=hhmm)
             if hasattr(self, "time_ss_lbl"):

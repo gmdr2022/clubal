@@ -7,14 +7,16 @@ from pathlib import Path
 
 from .environment import Environment
 
-
 APP_ROOT_NAME = "CLUBAL_Agenda_Live"
 PORTABLE_ROOT_PARENT = "_data"
 
-# Cria um "atalho de pasta" (junction) para facilitar achar logs/cache rápido.
-# Fica dentro do __pycache__ (pode ser apagado e será recriado no próximo run).
-RUNTIME_LINK_PARENT = "__pycache__"
-RUNTIME_LINK_NAME = "_CLUBAL_DATA"
+# Alias visual local para facilitar abrir logs/cache sem entrar no AppData.
+# Fonte de verdade continua sendo writable_root / ctx.paths.*.
+RUNTIME_LINK_NAME = "_runtime_link"
+
+# Legado antigo: __pycache__/_CLUBAL_DATA
+LEGACY_RUNTIME_LINK_PARENT = "__pycache__"
+LEGACY_RUNTIME_LINK_NAME = "_CLUBAL_DATA"
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,7 @@ class Paths:
 
     assets_dir: Path
     data_dir: Path
+
     logs_dir: Path | None
     cache_dir: Path | None
 
@@ -65,40 +68,77 @@ def _create_junction_best_effort(link_path: Path, target_path: Path) -> None:
         if os.name != "nt":
             return
 
-        # Já existe -> não mexe
         if link_path.exists():
             return
 
-        # Garante pai
         try:
             link_path.parent.mkdir(parents=True, exist_ok=True)
         except Exception:
             return
 
-        # mklink /J <link> <target>
         cmd = ["cmd", "/c", "mklink", "/J", str(link_path), str(target_path)]
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        subprocess.run(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except Exception:
+        return
+
+
+def _remove_junction_best_effort(link_path: Path) -> None:
+    """
+    Remove uma junction/atalho legado sem tocar no destino real.
+    Best-effort: nunca quebra o app.
+    """
+    try:
+        if os.name != "nt":
+            return
+
+        if not link_path.exists():
+            return
+
+        try:
+            os.rmdir(link_path)
+            return
+        except Exception:
+            pass
+
+        try:
+            link_path.unlink()
+        except Exception:
+            pass
+    except Exception:
+        return
+
+
+def _cleanup_legacy_runtime_link_best_effort(app_dir: Path) -> None:
+    """
+    Remove o alias legado __pycache__/_CLUBAL_DATA se ele ainda existir.
+    """
+    try:
+        legacy_link = app_dir / LEGACY_RUNTIME_LINK_PARENT / LEGACY_RUNTIME_LINK_NAME
+        _remove_junction_best_effort(legacy_link)
     except Exception:
         return
 
 
 def _ensure_runtime_link_best_effort(app_dir: Path, writable_root: Path | None) -> None:
     """
-    Cria um link local (junction) para a pasta gravável (logs/cache) dentro de:
-      <app_dir>/__pycache__/_CLUBAL_DATA  ->  <writable_root>
+    Cria um link local (junction) para a pasta gravável (logs/cache) em:
+        /_runtime_link
 
-    Se não houver writable_root, não faz nada.
+    -> Se não houver writable_root, não faz nada.
+    -> Depois tenta limpar o alias legado em __pycache__/_CLUBAL_DATA.
     """
     try:
         if writable_root is None:
             return
 
-        parent = app_dir / RUNTIME_LINK_PARENT
-        if not _ensure_dir_best_effort(parent):
-            return
-
-        link_path = parent / RUNTIME_LINK_NAME
+        link_path = app_dir / RUNTIME_LINK_NAME
         _create_junction_best_effort(link_path, writable_root)
+        _cleanup_legacy_runtime_link_best_effort(app_dir)
     except Exception:
         return
 
@@ -128,18 +168,19 @@ def build_paths(env: Environment) -> Paths:
             writable_root = root
 
     # Estrutura padronizada
-    # logs: <root>\logs
-    # package: <root>\package   (weather_cache.json, cache_old, weather_icons)
+    # logs: \logs
+    # package: \package (weather_cache.json, cache_old, weather_icons)
     if writable_root is not None:
         ld = writable_root / "logs"
         pd = writable_root / "package"
 
         if _ensure_dir_best_effort(ld):
             logs_dir = ld
+
         if _ensure_dir_best_effort(pd):
             cache_dir = pd
 
-    # Atalho local para facilitar achar logs/cache (best-effort)
+    # Alias local para facilitar achar logs/cache (best-effort)
     _ensure_runtime_link_best_effort(app_dir, writable_root)
 
     return Paths(
@@ -156,10 +197,12 @@ def build_paths(env: Environment) -> Paths:
 def cache_subdir(paths: Paths, name: str) -> Path | None:
     """
     Cria/retorna uma subpasta dentro do cache_dir gravável (installed/portable).
-    Ex.: cache_subdir(paths, "weather") -> <CACHE_ROOT>/weather
+
+    Ex.: cache_subdir(paths, "weather") -> /weather
     """
     if paths.cache_dir is None:
         return None
+
     p = paths.cache_dir / name
     if _ensure_dir_best_effort(p):
         return p

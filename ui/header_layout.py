@@ -31,6 +31,7 @@ def calc_header_geometry(sw: int, sh: int) -> Tuple[int, int, int, int, int]:
     hours_w = max(620, hours_w - 120)
 
     weather_w = unit_w
+
     right_w = int(hours_w + 40 + weather_w) + 24
 
     return hours_w, weather_w, card_h, header_h, right_w

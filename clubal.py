@@ -73,56 +73,22 @@ from ui.theme import (
 from infra.logging_manager import rotate_logs_if_needed, write_log
 from ui.header_layout import calc_header_geometry
 from ui.rounded_frame import RoundedFrame
+from ui.image_runtime import (
+    PIL_OK,
+    PIL_LANCZOS,
+    PIL_NEAREST,
+    configure_image_search_dirs,
+    first_image_in_dir as _first_image_in_dir,
+    img_path_try as _img_path_try,
+    pil_new_rgba as _pil_new_rgba,
+    pil_open_rgba as _pil_open_rgba,
+    pil_photo_image as _pil_photo_image,
+)
 from ui.content_sections import SectionFrame
 from ui.content_cards import ClassCard
 from ui.header_hours import HoursCard
 
 ctx = bootstrap()
-
-# Pillow é opcional: melhora compatibilidade e redimensionamento de PNG (fallback para tk.PhotoImage).
-try:
-    from PIL import Image, ImageTk  # type: ignore
-    PIL_OK = True
-except Exception:
-    Image = None
-    ImageTk = None
-    PIL_OK = False
-
-def _pil_image_module() -> Any:
-    if not PIL_OK or Image is None:
-        raise RuntimeError("Pillow unavailable")
-    return cast(Any, Image)
-
-
-def _pil_imagetk_module() -> Any:
-    if not PIL_OK or ImageTk is None:
-        raise RuntimeError("Pillow unavailable")
-    return cast(Any, ImageTk)
-
-
-if PIL_OK:
-    _pil_img_mod = _pil_image_module()
-    try:
-        PIL_LANCZOS = _pil_img_mod.Resampling.LANCZOS
-        PIL_NEAREST = _pil_img_mod.Resampling.NEAREST
-    except Exception:
-        PIL_LANCZOS = getattr(_pil_img_mod, "LANCZOS", 1)
-        PIL_NEAREST = getattr(_pil_img_mod, "NEAREST", 0)
-else:
-    PIL_LANCZOS = 1
-    PIL_NEAREST = 0
-
-
-def _pil_open_rgba(path: str):
-    return _pil_image_module().open(path).convert("RGBA")
-
-
-def _pil_new_rgba(size: Tuple[int, int], color: Tuple[int, int, int, int]):
-    return _pil_image_module().new("RGBA", size, color)
-
-
-def _pil_photo_image(image_obj: Any):
-    return _pil_imagetk_module().PhotoImage(image_obj)
 
 from infra.xlsx_loader import reload_classes_if_needed
 
@@ -227,83 +193,14 @@ GRAPHICS_CLIENT_DIR = os.path.join(GRAPHICS_LOGOS_DIR, "client")
 CLUBAL_ICON_FILE = "CLUBAL_ICO.png"   # dentro de graphics/logos/brand/
 CLIENT_LOGO_DIRNAME = os.path.join("logos", "client")
 CLIENT_LOGO_FALLBACK = "logo_sesi_default.png"
-
-
-def _first_image_in_dir(dir_path: str) -> Optional[str]:
-    """
-    Retorna o caminho da primeira imagem encontrada em dir_path.
-    Preferência: PNG/JPG/JPEG/GIF. Ordena por nome para previsibilidade.
-    """
-    try:
-        if not dir_path or not os.path.isdir(dir_path):
-            return None
-
-        files = []
-        for name in os.listdir(dir_path):
-            p = os.path.join(dir_path, name)
-            if not os.path.isfile(p):
-                continue
-
-            low = name.lower()
-            if low.endswith((".png", ".jpg", ".jpeg", ".gif")):
-                files.append(p)
-
-        if not files:
-            return None
-
-        files.sort(key=lambda x: os.path.basename(x).lower())
-        return files[0]
-
-    except Exception:
-        return None
-
-
-def _img_path_try(base: str) -> Optional[str]:
-    """
-    Procura assets em múltiplas pastas.
-    Aceita 'base' com ou sem extensão.
-    """
-    try:
-        b = str(base or "").strip()
-        if not b:
-            return None
-
-        has_ext = b.lower().endswith((".png", ".gif", ".jpg", ".jpeg"))
-
-        search_dirs = [
-            GRAPHICS_DIR,
-            GRAPHICS_LOGOS_DIR,
-            GRAPHICS_BRAND_DIR,
-            GRAPHICS_CLIENT_DIR,
-            os.path.join(GRAPHICS_DIR, "weather", "icons"),
-            os.path.join(GRAPHICS_DIR, "weather", "bg"),
-        ]
-
-        candidates = []
-        if has_ext:
-            candidates.append(b)
-        else:
-            candidates.extend([
-                b + ".png",
-                b + ".PNG",
-                b + ".jpg",
-                b + ".JPG",
-                b + ".jpeg",
-                b + ".JPEG",
-                b + ".gif",
-                b + ".GIF",
-            ])
-
-        for d in search_dirs:
-            for name in candidates:
-                p = os.path.join(d, name)
-                if os.path.exists(p):
-                    return p
-
-        return None
-
-    except Exception:
-        return None
+configure_image_search_dirs([
+    GRAPHICS_DIR,
+    GRAPHICS_LOGOS_DIR,
+    GRAPHICS_BRAND_DIR,
+    GRAPHICS_CLIENT_DIR,
+    os.path.join(GRAPHICS_DIR, "weather", "icons"),
+    os.path.join(GRAPHICS_DIR, "weather", "bg"),
+])
 
 # logs em local gravável (ou desabilitados, se o ambiente bloquear escrita)
 LOGS_DIR = str(ctx.paths.logs_dir) if ctx.paths.logs_dir is not None else None

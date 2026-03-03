@@ -95,6 +95,11 @@ from app.runtime_boot import (
 )
 from app.runtime_state import build_runtime_state
 from app.main_ui_builder import build_main_ui
+from app.main_ui_assets import (
+    pil_contain_to_size,
+    refresh_client_logo,
+    refresh_logo,
+)
 
 ctx = bootstrap()
 
@@ -336,133 +341,23 @@ class ClubalApp(tk.Tk):
 
         self.configure(bg=self.bg_root)
 
-    # -------------------------
-    # Logo (CLUBAL) - slot fixo
-    # -------------------------
     def _pil_contain_to_size(self, path: str, w: int, h: int):
-        """
-        Resize tipo 'CONTAIN' (encaixa sem cortar), centralizado, mantendo transparência.
-        Retorna PhotoImage (PIL).
-        """
-        im = _pil_open_rgba(path)
-        iw, ih = im.size
-        if iw <= 0 or ih <= 0:
-            return None
-
-        scale = min(w / iw, h / ih)
-        nw = max(1, int(iw * scale))
-        nh = max(1, int(ih * scale))
-        im = im.resize((nw, nh), PIL_LANCZOS)
-
-        canvas = _pil_new_rgba((w, h), (0, 0, 0, 0))
-        x = (w - nw) // 2
-        y = (h - nh) // 2
-        canvas.paste(im, (x, y), im)
-
-        return _pil_photo_image(canvas)
+        return pil_contain_to_size(path, w, h)
 
     def _refresh_logo(self):
-        """
-        Logo do CLUBAL (fixo):
-        Sempre usa graphics/logos/brand/CLUBAL_ICO.png
-        """
-        p = os.path.join(GRAPHICS_BRAND_DIR, CLUBAL_ICON_FILE)
-        if not os.path.exists(p):
-            # fallback (tenta achar por busca)
-            p = _img_path_try("CLUBAL_ICO") or _img_path_try(CLUBAL_ICON_FILE)
-
-        if not p or not os.path.exists(p):
-            if hasattr(self, "logo_lbl"):
-                self.logo_lbl.configure(image="")
-            return
-
-        try:
-            target_w = 150
-            target_h = 150
-
-            if hasattr(self, "clubal_slot") and self.clubal_slot.winfo_exists():
-                self.clubal_slot.update_idletasks()
-                sw = self.clubal_slot.winfo_width()
-                sh = self.clubal_slot.winfo_height()
-                if sw and sw > 10:
-                    target_w = max(90, sw - 10)
-                if sh and sh > 10:
-                    target_h = max(90, sh - 10)
-
-            img = None
-
-            if PIL_OK:
-                try:
-                    img = self._pil_contain_to_size(p, target_w, target_h)
-                except Exception:
-                    img = None
-
-            if img is None:
-                tkimg = tk.PhotoImage(file=p)
-                fx = max(1, (tkimg.width() + target_w - 1) // target_w) if tkimg.width() > target_w else 1
-                fy = max(1, (tkimg.height() + target_h - 1) // target_h) if tkimg.height() > target_h else 1
-                f = max(fx, fy)
-                if f > 1:
-                    tkimg = tkimg.subsample(f)
-                img = tkimg
-
-            self.logo_img = img
-            self.logo_lbl.configure(image=self.logo_img)
-
-        except Exception:
-            if hasattr(self, "logo_lbl"):
-                self.logo_lbl.configure(image="")
+        refresh_logo(
+            self,
+            graphics_brand_dir=GRAPHICS_BRAND_DIR,
+            clubal_icon_file=CLUBAL_ICON_FILE,
+            img_path_try=_img_path_try,
+        )
 
     def _refresh_client_logo(self):
-        """
-        Logo do CLIENTE (dinâmico):
-        Usa a PRIMEIRA imagem (por nome) dentro de graphics/logos/client/
-        """
-        try:
-            client_dir = GRAPHICS_CLIENT_DIR
-            p = _first_image_in_dir(client_dir)
-
-            if not p:
-                if hasattr(self, "client_logo_lbl"):
-                    self.client_logo_lbl.configure(image="")
-                return
-
-            target_w = 320
-            target_h = 150
-
-            if hasattr(self, "client_slot") and self.client_slot.winfo_exists():
-                self.client_slot.update_idletasks()
-                sw = self.client_slot.winfo_width()
-                sh = self.client_slot.winfo_height()
-                if sw and sw > 10:
-                    target_w = max(160, sw - 10)
-                if sh and sh > 10:
-                    target_h = max(90, sh - 10)
-
-            img = None
-
-            if PIL_OK:
-                try:
-                    img = self._pil_contain_to_size(p, target_w, target_h)
-                except Exception:
-                    img = None
-
-            if img is None:
-                tkimg = tk.PhotoImage(file=p)
-                fx = max(1, (tkimg.width() + target_w - 1) // target_w) if tkimg.width() > target_w else 1
-                fy = max(1, (tkimg.height() + target_h - 1) // target_h) if tkimg.height() > target_h else 1
-                f = max(fx, fy)
-                if f > 1:
-                    tkimg = tkimg.subsample(f)
-                img = tkimg
-
-            self.client_logo_img = img
-            self.client_logo_lbl.configure(image=self.client_logo_img)
-            self.client_logo_lbl.place(relx=0.5, rely=0.5, anchor="center")
-
-        except Exception:
-            if hasattr(self, "client_logo_lbl"):
-                self.client_logo_lbl.configure(image="")
+        refresh_client_logo(
+            self,
+            graphics_client_dir=GRAPHICS_CLIENT_DIR,
+            first_image_in_dir=_first_image_in_dir,
+        )
 
     def _build_datecard_candidates_ptbr(self) -> List[str]:
         return build_datecard_candidates_ptbr()

@@ -202,3 +202,17 @@ def apply_weather_result_if_changed(
 
     app._last_weather_ui_key = key
     app.weather_card.set_weather(city_label, res)
+
+def refresh_agenda_if_due(
+    app: Any,
+    *,
+    min_interval_sec: int = 15,
+) -> None:
+    if time.time() - app._last_agenda_run_ts < min_interval_sec:
+        return
+
+    app._last_agenda_run_ts = time.time()
+
+    now_cards, next_cards = app._compute_now_next()
+    app.agora.update_cards(now_cards)
+    app.prox.update_cards(next_cards)

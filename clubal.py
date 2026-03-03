@@ -104,6 +104,7 @@ from app.main_ui_assets import (
 from app.refresh_pipeline import (
     apply_weather_result_if_changed,
     compute_now_next_cards,
+    refresh_agenda_if_due,
     reload_excel_if_needed,
     tick_weather_refresh,
 )
@@ -694,12 +695,11 @@ class ClubalApp(tk.Tk):
             # Excel
             self._reload_excel_if_needed(force=False)
 
-            # Agenda: no máximo a cada 15s
-            if time.time() - self._last_agenda_run_ts >= 15:
-                self._last_agenda_run_ts = time.time()
-                now_cards, next_cards = self._compute_now_next()
-                self.agora.update_cards(now_cards)
-                self.prox.update_cards(next_cards)
+            # Agenda
+            refresh_agenda_if_due(
+                self,
+                min_interval_sec=15,
+            )
 
             # Weather fetch
             tick_weather_refresh(

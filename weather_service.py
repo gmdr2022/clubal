@@ -439,8 +439,11 @@ def _build_opener(logger=None) -> urllib.request.OpenerDirector:
         pass
 
     try:
-        p_reg = urllib.request.getproxies_registry() or {}
-        proxies.update({k.lower(): v for k, v in p_reg.items() if v})
+        getproxies_registry = getattr(urllib.request, "getproxies_registry", None)
+        if callable(getproxies_registry):
+            p_reg_obj = getproxies_registry()
+            if isinstance(p_reg_obj, dict):
+                proxies.update({k.lower(): v for k, v in p_reg_obj.items() if v})
     except Exception:
         pass
 
@@ -1103,7 +1106,7 @@ def get_weather(
     logger=None,
 ) -> WeatherResult:
     current_cache_path, archive_dir = _cache_paths(app_dir)
-    _migrate_legacy_weather_storage(app_dir, logger=logger)    
+    _migrate_legacy_weather_storage(app_dir, logger=logger)
     now_hour = time.localtime().tm_hour
 
     use_lat = float(lat) if lat is not None else float(WEATHER_LAT)
@@ -1124,22 +1127,29 @@ def get_weather(
         res = _extract_summary(payload, now_hour=now_hour, lat=use_lat, lon=use_lon)
 
         if cache_enabled:
-            _archive_existing_cache(current_cache_path, archive_dir, logger=logger)
-            _write_json_atomic(
-                current_cache_path,
-                {
-                    "ts": res.cache_ts,
-                    "payload": payload,
-                    "city": (WEATHER_PLACE_CITY or city_label),
-                    "uf": (WEATHER_PLACE_UF or ""),
-                    "lat": use_lat,
-                    "lon": use_lon,
-                },
-            )
-            _cleanup_cache_archive(archive_dir, logger=logger)
+            cache_path = current_cache_path
+            cache_archive_dir = archive_dir
 
-            if logger:
-                logger(f"[WEATHER] ONLINE ok temp={res.temp_c} sym={res.symbol_code} cache_path={current_cache_path}")
+            if cache_path is not None and cache_archive_dir is not None:
+                _archive_existing_cache(cache_path, cache_archive_dir, logger=logger)
+                _write_json_atomic(
+                    cache_path,
+                    {
+                        "ts": res.cache_ts,
+                        "payload": payload,
+                        "city": (WEATHER_PLACE_CITY or city_label),
+                        "uf": (WEATHER_PLACE_UF or ""),
+                        "lat": use_lat,
+                        "lon": use_lon,
+                    },
+                )
+                _cleanup_cache_archive(cache_archive_dir, logger=logger)
+
+                if logger:
+                    logger(f"[WEATHER] ONLINE ok temp={res.temp_c} sym={res.symbol_code} cache_path={cache_path}")
+            else:
+                if logger:
+                    logger(f"[WEATHER] ONLINE ok temp={res.temp_c} sym={res.symbol_code} (cache disabled)")
         else:
             if logger:
                 logger(f"[WEATHER] ONLINE ok temp={res.temp_c} sym={res.symbol_code} (cache disabled)")
@@ -1148,22 +1158,25 @@ def get_weather(
 
     except Exception:
         if cache_enabled:
-            cached = _read_json(current_cache_path)
-            if cached and isinstance(cached.get("payload"), dict):
-                payload = cached["payload"]
+            cache_path = current_cache_path
 
-                c_lat = cached.get("lat", use_lat)
-                c_lon = cached.get("lon", use_lon)
+            if cache_path is not None:
+                cached = _read_json(cache_path)
+                if cached and isinstance(cached.get("payload"), dict):
+                    payload = cached["payload"]
 
-                res = _extract_summary(payload, now_hour=now_hour, lat=float(c_lat), lon=float(c_lon))
-                res.source = "cache"
-                res.cache_ts = cached.get("ts")
-                res.ok = True
+                    c_lat = cached.get("lat", use_lat)
+                    c_lon = cached.get("lon", use_lon)
 
-                if logger:
-                    logger(f"[WEATHER] FALLBACK cache ok ts={res.cache_ts} cache_path={current_cache_path}")
+                    res = _extract_summary(payload, now_hour=now_hour, lat=float(c_lat), lon=float(c_lon))
+                    res.source = "cache"
+                    res.cache_ts = cached.get("ts")
+                    res.ok = True
 
-                return res
+                    if logger:
+                        logger(f"[WEATHER] FALLBACK cache ok ts={res.cache_ts} cache_path={cache_path}")
+
+                    return res
 
         if logger:
             logger("[WEATHER] FAIL no cache available (or cache disabled)")

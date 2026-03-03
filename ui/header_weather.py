@@ -575,7 +575,7 @@ class WeatherCard(tk.Frame):
                 symbol_code=symbol_code,
                 is_day=is_day,
                 app_dir=app_dir,
-                logger=log,
+                logger=self._log,
                 user_agent="CLUBAL-AgendaLive/2.0 (contact: local)",
             )
         except Exception as e:

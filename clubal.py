@@ -102,8 +102,10 @@ from app.main_ui_assets import (
 )
 
 from app.refresh_pipeline import (
+    apply_weather_result_if_changed,
     compute_now_next_cards,
     reload_excel_if_needed,
+    tick_weather_refresh,
 )
 
 ctx = bootstrap()
@@ -646,40 +648,6 @@ class ClubalApp(tk.Tk):
 
         return now_cards, next_cards
 
-    # -------------------------
-    # Weather async
-    # -------------------------
-    def _weather_worker(self):
-        try:
-            res = weather_mod.get_weather(
-                city_label="Alfenas",
-                lat=-21.4267,
-                lon=-45.9470,
-                app_dir=str(self.ctx.paths.app_dir),
-                user_agent="CLUBAL-AgendaLive/2.0 (contact: local)",
-                logger=log,
-            )
-            with self._weather_lock:
-                self.weather_res = res
-                self.weather_last_fetch = time.time()
-        except Exception as e:
-            log(f"[WEATHER] Worker error {type(e).__name__}: {e}")
-        finally:
-            with self._weather_lock:
-                self._weather_inflight = False
-
-    def _tick_weather(self):
-        if (time.time() - self.weather_last_fetch) < 600 and self.weather_res is not None:
-            return
-
-        with self._weather_lock:
-            if self._weather_inflight:
-                return
-            self._weather_inflight = True
-
-        th = threading.Thread(target=self._weather_worker, daemon=True)
-        th.start()
-
     def _tick_housekeeping(self):
         if time.time() - self._last_housekeeping_ts < 86400:
             return
@@ -734,24 +702,17 @@ class ClubalApp(tk.Tk):
                 self.prox.update_cards(next_cards)
 
             # Weather fetch
-            self._tick_weather()
+            tick_weather_refresh(
+                self,
+                app_dir=str(self.ctx.paths.app_dir),
+                logger=log,
+            )
 
             # Weather UI: só quando mudou
-            with self._weather_lock:
-                res = self.weather_res
-            if res:
-                key = (
-                    getattr(res, "ok", None),
-                    getattr(res, "source", None),
-                    getattr(res, "temp_c", None),
-                    getattr(res, "symbol_code", None),
-                    getattr(res, "today_label", None),
-                    getattr(res, "tomorrow_label", None),
-                    getattr(res, "cache_ts", None),
-                )
-                if key != self._last_weather_ui_key:
-                    self._last_weather_ui_key = key
-                    self.weather_card.set_weather("Alfenas", res)
+            apply_weather_result_if_changed(
+                self,
+                city_label="Alfenas",
+            )
 
             self._tick_housekeeping()
 

@@ -88,6 +88,11 @@ from ui.content_sections import SectionFrame
 from ui.content_cards import ClassCard
 from ui.header_hours import HoursCard
 from ui.header_weather import WeatherCard
+from app.runtime_boot import (
+    enable_windows_dpi_awareness,
+    force_tk_scaling_96dpi,
+    selftest_geometry,
+)
 
 ctx = bootstrap()
 
@@ -96,83 +101,6 @@ from infra.xlsx_loader import reload_classes_if_needed
 import weather_service as weather_mod
 
 from datetime import datetime, timedelta, date as dt_date, time as dt_time
-
-# -------------------------
-# DPI / Scaling (Windows) — estabiliza layout entre PCs (100%/125%/150%)
-# -------------------------
-
-def _enable_windows_dpi_awareness() -> None:
-    """
-    Torna o processo DPI-aware para evitar variações de escala entre máquinas.
-    Deve rodar ANTES de criar qualquer janela Tk (antes de ClubalApp()).
-    """
-    if sys.platform != "win32":
-        return
-    try:
-        import ctypes  # noqa
-        try:
-            # Windows 10 (1607+) — melhor opção: Per-Monitor V2
-            DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4  # constante (HANDLE)
-            ctypes.windll.user32.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
-            return
-        except Exception:
-            pass
-
-        try:
-            # Windows 8.1+ fallback
-            PROCESS_PER_MONITOR_DPI_AWARE = 2
-            ctypes.windll.shcore.SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE)
-            return
-        except Exception:
-            pass
-
-        try:
-            # Windows Vista+ fallback
-            ctypes.windll.user32.SetProcessDPIAware()
-        except Exception:
-            pass
-    except Exception:
-        pass
-
-def _force_tk_scaling_96dpi(root: tk.Tk) -> float:
-    """
-    Força (ou não) a escala do Tk.
-
-    Modo padrão (sem variável): FIXED_96DPI (o que você já usa hoje).
-    Você pode mudar sem editar código usando variável de ambiente:
-
-      CLUBAL_TK_SCALING=FIXED_96DPI   -> força 96dpi (96/72=1.3333)  [PADRÃO]
-      CLUBAL_TK_SCALING=AUTO          -> não força nada (deixa Windows/Tk decidirem)
-      CLUBAL_TK_SCALING=<float>       -> ex: 1.25 / 1.3333 / 1.5
-
-    Retorna a escala aplicada (ou 0.0 se não aplicou).
-    """
-    try:
-        mode = str(os.environ.get("CLUBAL_TK_SCALING", "FIXED_96DPI")).strip().upper().strip().upper()
-
-        # AUTO: não mexe no scaling
-        if mode in ("AUTO", "DEFAULT", "SYSTEM", "NONE"):
-            return 0.0
-
-        # FIXED_96DPI: comportamento atual
-        if mode in ("FIXED_96DPI", "96DPI", "FIXED"):
-            fixed = 96.0 / 72.0  # 1.333333...
-            root.tk.call("tk", "scaling", fixed)
-            return float(fixed)
-
-        # número direto (ex.: 1.25 / 1.5)
-        try:
-            val = float(mode.replace(",", "."))
-            if 0.8 <= val <= 3.0:
-                root.tk.call("tk", "scaling", val)
-                return float(val)
-        except Exception:
-            pass
-
-        # fallback: mantém o atual
-        return 0.0
-    except Exception:
-        return 0.0
 
 # Build ID para diagnóstico (logs).
 CLUBAL_UI_BUILD = f"UI_BUILD_{time.strftime('%Y-%m-%d')}A"
@@ -278,7 +206,7 @@ class ClubalApp(tk.Tk):
         super().__init__()
 
         # DPI / Tk scaling: estabiliza o mesmo layout em 1360x768 e 1920x1080 (com escalas diferentes)
-        _force_tk_scaling_96dpi(self)
+        force_tk_scaling_96dpi(self)
 
         self.title("CLUBAL - Club Agenda Live")
         self.attributes("-fullscreen", True)
@@ -1389,8 +1317,8 @@ class ClubalApp(tk.Tk):
 
 if __name__ == "__main__":
     try:
-        _enable_windows_dpi_awareness()  # precisa ocorrer antes do Tk criar janelas
-        _selftest_geometry(logger=log)
+        enable_windows_dpi_awareness()  # precisa ocorrer antes do Tk criar janelas
+        selftest_geometry(logger=log)
         ClubalApp().mainloop()
     except Exception:
         log("Fatal error:\n" + traceback.format_exc())

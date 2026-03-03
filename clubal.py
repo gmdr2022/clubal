@@ -93,6 +93,7 @@ from app.runtime_boot import (
     force_tk_scaling_96dpi,
     selftest_geometry,
 )
+from app.runtime_state import build_runtime_state
 
 ctx = bootstrap()
 
@@ -105,100 +106,25 @@ from datetime import datetime, timedelta, date as dt_date, time as dt_time
 # Build ID para diagnóstico (logs).
 CLUBAL_UI_BUILD = f"UI_BUILD_{time.strftime('%Y-%m-%d')}A"
 
-# -------------------------
-# Infra/IO consolidado em bootstrap + ctx.paths + logging local
-# -------------------------
+runtime = build_runtime_state(ctx)
 
-GRAPHICS_DIR = str(ctx.paths.assets_dir)
+GRAPHICS_DIR = runtime.graphics_dir
 
-# -------------------------
-# Graphics: fixed CLUBAL icon + dynamic client logo folder
-# -------------------------
+GRAPHICS_LOGOS_DIR = runtime.graphics_logos_dir
+GRAPHICS_BRAND_DIR = runtime.graphics_brand_dir
+GRAPHICS_CLIENT_DIR = runtime.graphics_client_dir
 
-GRAPHICS_LOGOS_DIR = os.path.join(GRAPHICS_DIR, "logos")
-GRAPHICS_BRAND_DIR = os.path.join(GRAPHICS_LOGOS_DIR, "brand")
-GRAPHICS_CLIENT_DIR = os.path.join(GRAPHICS_LOGOS_DIR, "client")
+CLUBAL_ICON_FILE = runtime.clubal_icon_file
+CLIENT_LOGO_DIRNAME = runtime.client_logo_dirname
+CLIENT_LOGO_FALLBACK = runtime.client_logo_fallback
 
-CLUBAL_ICON_FILE = "CLUBAL_ICO.png"   # dentro de graphics/logos/brand/
-CLIENT_LOGO_DIRNAME = os.path.join("logos", "client")
-CLIENT_LOGO_FALLBACK = "logo_sesi_default.png"
-configure_image_search_dirs([
-    GRAPHICS_DIR,
-    GRAPHICS_LOGOS_DIR,
-    GRAPHICS_BRAND_DIR,
-    GRAPHICS_CLIENT_DIR,
-    os.path.join(GRAPHICS_DIR, "weather", "icons"),
-    os.path.join(GRAPHICS_DIR, "weather", "bg"),
-])
+LOGS_DIR = runtime.logs_dir
+LOG_PATH = runtime.log_path
+LOG_ARCHIVE_DIR = runtime.log_archive_dir
 
-# logs em local gravável (ou desabilitados, se o ambiente bloquear escrita)
-LOGS_DIR = str(ctx.paths.logs_dir) if ctx.paths.logs_dir is not None else None
-LOG_PATH = os.path.join(LOGS_DIR, "clubal.log") if LOGS_DIR else None
-LOG_ARCHIVE_DIR = os.path.join(LOGS_DIR, "archive") if LOGS_DIR else None
+log = runtime.log
 
-# Rotação/limpeza de logs (evita crescimento infinito de arquivo).
-LOG_ROTATE_MAX_BYTES = 2 * 1024 * 1024   # 2MB
-LOG_ARCHIVE_KEEP = 6                     # mantém os últimos N logs arquivados
-LOG_ARCHIVE_MAX_AGE_DAYS = 30            # e/ou apaga logs muito antigos
-
-def log(msg: str) -> None:
-    try:
-        rotate_logs_if_needed(LOG_PATH, LOG_ARCHIVE_DIR)
-        write_log(LOG_PATH, LOGS_DIR, msg)
-    except Exception:
-        pass
-
-
-def _ensure_log_archive_dir() -> bool:
-    if not LOG_ARCHIVE_DIR:
-        return False
-    try:
-        os.makedirs(LOG_ARCHIVE_DIR, exist_ok=True)
-        return True
-    except Exception:
-        return False
-
-def _selftest_geometry(logger=log) -> None:
-    """
-    Teste rápido (sem UI) dos cálculos de geometria em resoluções comuns.
-    Ative com: CLUBAL_SELFTEST=1
-    """
-    try:
-        if str(os.environ.get("CLUBAL_SELFTEST", "0")).strip() not in ("1", "TRUE", "YES", "ON"):
-            return
-
-        tests = [
-            (1360, 768),
-            (1920, 1080),
-            (2560, 1440),
-            (3840, 2160),
-        ]
-
-        logger("[SELFTEST] Geometry test start")
-
-        for sw, sh in tests:
-            hours_w, weather_w, card_h, header_h, right_w = calc_header_geometry(sw, sh)
-
-            ok1 = card_h <= (header_h - 16)
-            ok2 = right_w <= sw
-
-            logger(
-                "[SELFTEST] "
-                f"{sw}x{sh} -> hours_w={hours_w} weather_w={weather_w} card_h={card_h} header_h={header_h} right_w={right_w} "
-                f"ok_card_in_header={ok1} ok_right_fits_screen={ok2}"
-            )
-
-        logger("[SELFTEST] Geometry test end")
-    except Exception as e:
-        try:
-            logger(f"[SELFTEST] Exception {type(e).__name__}: {e}")
-        except Exception:
-            pass
-
-# -------------------------
-# Excel path (loader lives in infra.xlsx_loader)
-# -------------------------
-EXCEL_PATH = os.path.join(str(ctx.paths.data_dir), "grade.xlsx")
+EXCEL_PATH = runtime.excel_path
 
 class ClubalApp(tk.Tk):
     def __init__(self):

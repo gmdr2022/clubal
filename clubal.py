@@ -101,6 +101,11 @@ from app.main_ui_assets import (
     refresh_logo,
 )
 
+from app.refresh_pipeline import (
+    compute_now_next_cards,
+    reload_excel_if_needed,
+)
+
 ctx = bootstrap()
 
 from infra.xlsx_loader import reload_classes_if_needed
@@ -603,7 +608,7 @@ class ClubalApp(tk.Tk):
     # Excel reload
     # -------------------------
     def _reload_excel_if_needed(self, force: bool = False):
-        self.all_items, self.last_excel_mtime, _changed = reload_classes_if_needed(
+        self.all_items, self.last_excel_mtime = reload_excel_if_needed(
             EXCEL_PATH,
             self.all_items,
             self.last_excel_mtime,
@@ -616,48 +621,13 @@ class ClubalApp(tk.Tk):
     # -------------------------
     def _compute_now_next(self) -> Tuple[List[Tuple], List[Tuple]]:
         now_dt = datetime.now()
-        window_end = now_dt + timedelta(minutes=120)
 
-        now_list, next_list, discard_day, discard_time, discard_other = agenda_compute_now_next(
+        now_cards, next_cards, window_end, discard_day, discard_time, discard_other = compute_now_next_cards(
             now_dt=now_dt,
             all_items=self.all_items,
             window_minutes=120,
             log_fn=log,
         )
-
-        now_cards = []
-        for it, start_dt, end_dt in now_list:
-            progress = remaining_progress(now_dt, start_dt, end_dt)
-            mins_left = minutes_until(now_dt, end_dt)
-            now_cards.append(
-                (
-                    it.start,
-                    it.end,
-                    it.modalidade,
-                    it.professor,
-                    "",
-                    it.tag,
-                    progress,
-                    mins_left,
-                )
-            )
-
-        next_cards = []
-        for it, start_dt, end_dt in next_list:
-            progress_next = upcoming_progress(now_dt, start_dt, window_end)
-            mins_to_start = minutes_until(now_dt, start_dt)
-            next_cards.append(
-                (
-                    it.start,
-                    it.end,
-                    it.modalidade,
-                    it.professor,
-                    "",
-                    it.tag,
-                    progress_next,
-                    mins_to_start,
-                )
-            )
 
         if self.all_items and (len(now_cards) == 0 and len(next_cards) == 0):
             if time.time() - self._last_zero_agenda_log_ts > 60:

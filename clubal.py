@@ -94,6 +94,7 @@ from app.runtime_boot import (
     selftest_geometry,
 )
 from app.runtime_state import build_runtime_state
+from app.main_ui_builder import build_main_ui
 
 ctx = bootstrap()
 
@@ -162,8 +163,71 @@ class ClubalApp(tk.Tk):
         # Debug via variável de ambiente:
         # - CLUBAL_DEBUG_LAYOUT=1 (marca áreas na UI)
         # - CLUBAL_DEBUG_AGENDA=1  (logs detalhados da agenda)
+
         self.DEBUG_LAYOUT = str(os.environ.get("CLUBAL_DEBUG_LAYOUT", "0")).strip().lower() in ("1", "true", "yes", "on")
         self.DEBUG_AGENDA = str(os.environ.get("CLUBAL_DEBUG_AGENDA", "0")).strip().lower() in ("1", "true", "yes", "on")
+
+        # Referências de UI criadas externamente por app.main_ui_builder.
+        # Isso mantém o Pylance ciente dos atributos mesmo após a extração
+        # do builder para fora da classe.
+        self.header: Any = None
+        self.header_bg: Any = None
+        self.header_panel: Any = None
+        self.header_panel_edge: Any = None
+        self.header_panel_edge2: Any = None
+        self.header_panel_edge3: Any = None
+        self.header_panel_edge4: Any = None
+        self.header_panel_top_glow: Any = None
+        self.header_bottom_line: Any = None
+        self.header_right: Any = None
+
+        self.left_stack: Any = None
+        self.logos_row: Any = None
+        self.clubal_slot: Any = None
+        self.logo_lbl: Any = None
+        self.logo_img: Any = None
+
+        self.client_slot: Any = None
+        self.client_logo_lbl: Any = None
+        self.client_logo_img: Any = None
+
+        self.datecard: Any = None
+        self.datecard_canvas: Any = None
+        self._date_text_id: Any = None
+        self._date_shadow_id: Any = None
+        self._datecard_h: Any = None
+
+        self.clockbox: Any = None
+        self.clockcard: Any = None
+        self.clock_inner: Any = None
+        self.clock_center: Any = None
+        self._clockcard_h: Any = None
+
+        self.f_date_line: Any = None
+        self.f_time_main: Any = None
+        self.f_time_sec: Any = None
+
+        self.header_onpanel_main: Any = None
+        self.header_onpanel_soft: Any = None
+
+        self.time_hhmm_lbl: Any = None
+        self.time_ss_lbl: Any = None
+
+        self.right_center: Any = None
+        self.hours_card: Any = None
+        self.weather_card: Any = None
+
+        self.div: Any = None
+        self.div_hi_line: Any = None
+        self.div_lo_line: Any = None
+
+        self.main: Any = None
+        self.vdiv: Any = None
+        self.agora: Any = None
+        self.prox: Any = None
+
+        self._right_vspacer_top: Any = None
+        self._right_vspacer_bottom: Any = None
 
         self.bind("<Escape>", lambda e: self.destroy())
 
@@ -540,418 +604,8 @@ class ClubalApp(tk.Tk):
         hours_w, weather_w, card_h, header_h, _right_w = calc_header_geometry(sw, sh)
         return hours_w, weather_w, card_h, header_h
 
-    # -------------------------
-    # Build UI (ÚNICO)
-    # -------------------------
     def _build_ui(self):
-
-        # ✅ cleanup explícito (evita after() pendurado em rebuild de tema)
-        try:
-            if hasattr(self, "agora") and self.agora is not None:
-                try:
-                    self.agora.dispose()
-                except Exception:
-                    pass
-            if hasattr(self, "hours_card") and self.hours_card is not None:
-                try:
-                    self.hours_card.dispose()
-                except Exception:
-                    pass
-            if hasattr(self, "prox") and self.prox is not None:
-                try:
-                    self.prox.dispose()
-                except Exception:
-                    pass
-            if hasattr(self, "weather_card") and self.weather_card is not None:
-                try:
-                    self.weather_card.dispose()
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-        for w in list(self.winfo_children()):
-            try:
-                w.destroy()
-            except Exception:
-                pass
-
-        hours_w, weather_w, card_h, header_h = self._calc_header_geometry()
-        right_w = int(hours_w + 40 + weather_w) + 24
-        self._last_header_geom = (hours_w, weather_w, card_h, header_h)
-
-        self.header = tk.Frame(self, bg=self.bg_header, height=header_h)
-        self.header.pack(fill="x", side="top")
-        self.header.pack_propagate(False)
-
-        # -------------------------
-        # Header background (B)
-        # -------------------------
-        if self.is_day_theme:
-            header_base = self.bg_header
-            panel_fill = "#0b2b5e"
-            panel_bottom = "#0a254e"
-            panel_edge = "#0f3a77"
-            inset = SP_12
-        else:
-            header_base = "#050e1a"
-            panel_fill = "#0a1f38"
-            panel_bottom = "#08182c"
-            panel_edge = "#123d73"
-            inset = SP_16
-
-        self.header_bg = tk.Frame(self.header, bg=header_base)
-        self.header_bg.place(x=0, y=0, relwidth=1, relheight=1)
-
-        self.header_panel = tk.Frame(self.header, bg=panel_fill)
-        self.header_panel.place(x=inset, y=inset, relwidth=1, width=-(2 * inset), relheight=1, height=-(2 * inset))
-
-        self.header_panel_edge = tk.Frame(self.header_panel, bg=panel_edge)
-        self.header_panel_top_glow = tk.Frame(self.header_panel, bg="#1b4f91", height=1)
-        self.header_panel_top_glow.place(x=0, y=1, relwidth=1)
-        self.header_panel_edge.place(x=0, y=0, relwidth=1, height=1)
-
-        self.header_panel_edge2 = tk.Frame(self.header_panel, bg=panel_edge)
-        self.header_panel_edge2.place(x=0, y=0, width=1, relheight=1)
-
-        self.header_panel_edge3 = tk.Frame(self.header_panel, bg=panel_edge)
-        self.header_panel_edge3.place(relx=1.0, x=-1, y=0, width=1, relheight=1)
-
-        self.header_panel_edge4 = tk.Frame(self.header_panel, bg=panel_edge)
-        self.header_panel_edge4.place(x=0, rely=1.0, y=-1, relwidth=1, height=1)
-
-        self.header_bottom_line = tk.Frame(self.header_panel, bg=panel_bottom, height=3)
-        self.header_bottom_line.pack(side="bottom", fill="x")
-
-        self.header_bg.lower()
-        self.header_panel.lower()
-
-        header_fill = panel_fill
-
-        # HEADER GRID (2 linhas)
-        self.header.grid_rowconfigure(0, weight=1)
-        self.header.grid_rowconfigure(1, weight=1)
-
-        self.header.grid_columnconfigure(0, weight=1)
-        self.header.grid_columnconfigure(1, weight=0, minsize=right_w)
-
-        # LEFT STACK
-        self.left_stack = tk.Frame(self.header, bg=header_fill)
-        self.left_stack.grid(
-            row=0,
-            column=0,
-            rowspan=2,
-            sticky="nsew",
-            padx=(SP_12, SP_8),
-            pady=(SP_8, SP_12)
-        )
-        self.left_stack.grid_columnconfigure(0, weight=1)
-        self.left_stack.grid_rowconfigure(0, weight=0)
-        self.left_stack.grid_rowconfigure(1, weight=0)
-        self.left_stack.grid_rowconfigure(2, weight=1)
-
-        # Row 0: logos
-        LOGOS_ROW_H = 150
-        CLUBAL_SLOT_S = LOGOS_ROW_H
-
-        self.logos_row = tk.Frame(self.left_stack, bg=header_fill, height=LOGOS_ROW_H)
-        self.logos_row.grid(row=0, column=0, sticky="ew")
-        self.logos_row.grid_propagate(False)
-
-        self.logos_row.grid_columnconfigure(0, weight=0, minsize=CLUBAL_SLOT_S)
-        self.logos_row.grid_columnconfigure(1, weight=1, minsize=160)
-
-        self.clubal_slot = tk.Frame(self.logos_row, bg=header_fill, width=CLUBAL_SLOT_S, height=LOGOS_ROW_H)
-        self.clubal_slot.grid(row=0, column=0, sticky="w")
-        self.clubal_slot.grid_propagate(False)
-
-        self.logo_img = None
-        self.logo_lbl = tk.Label(self.clubal_slot, bg=header_fill)
-        self.logo_lbl.place(relx=0.5, rely=0.5, anchor="center")
-
-        self.client_slot = tk.Frame(self.logos_row, bg=header_fill, height=LOGOS_ROW_H)
-        self.client_slot.grid(row=0, column=1, sticky="ew", padx=(18, 0))
-        self.client_slot.grid_propagate(False)
-
-        self.client_logo_img = None
-        self.client_logo_lbl = tk.Label(self.client_slot, bg=header_fill)
-        self.client_logo_lbl.place(relx=0.5, rely=0.5, anchor="center")
-
-        if self.DEBUG_LAYOUT:
-            self.clubal_slot.configure(highlightthickness=2, highlightbackground="#00ff00")
-            self.client_slot.configure(highlightthickness=2, highlightbackground="#00ffff")
-
-        self._refresh_logo()
-        self._refresh_client_logo()
-
-        # Row 1: DateCard
-        self.datecard = tk.Frame(self.left_stack, bg=header_fill)
-        self.datecard.grid(row=1, column=0, sticky="ew", pady=(10, 8))
-
-        if self.DEBUG_LAYOUT:
-            self.datecard.configure(highlightthickness=2, highlightbackground="#ffd000")
-
-        # ✅ altura do datecard dinâmica (refinada no _layout_update)
-        self._datecard_h = 58
-
-        # ✅ DateCard: “glass” com relevo VISÍVEL (texto desenhado no canvas, sem Label por cima)
-        if self.is_day_theme:
-            datecard_bg = self._blend_hex(panel_fill, "#ffffff", 0.10)
-            datecard_border = self._blend_hex(panel_fill, "#ffffff", 0.20)
-            datecard_fg = "#ffffff"
-            shadow_stipple = "gray12"
-        else:
-            datecard_bg = self._blend_hex("#0b223c", "#ffffff", 0.06)
-            datecard_border = self._blend_hex("#132744", "#ffffff", 0.08)
-            datecard_fg = "#eaf2ff"
-            shadow_stipple = "gray12"
-
-        self.datecard_canvas = RoundedFrame(
-            self.datecard,
-            radius=RADIUS_SM,
-            bg=datecard_bg,
-            border=datecard_border,
-            shadow=True,
-            shadow_offset=(2, 3),
-            shadow_stipple=shadow_stipple,
-            gloss=True,
-            gloss_inset=3,
-            height=self._datecard_h
-        )
-        self.datecard_canvas.pack(fill="x", expand=False)
-        self.datecard_canvas.pack_propagate(False)
-
-        self.f_date_line = tkfont.Font(
-            family="Segoe UI",
-            size=18,
-            weight="bold"
-        )
-
-        # DateCard: texto desenhado no Canvas para controle fino de layout (sem Label por cima).
-        self._date_text_id = None
-        self._date_shadow_id = None
-
-        def _draw_date_text(_evt=None):
-            try:
-                w = self.datecard_canvas.winfo_width()
-                h = self.datecard_canvas.winfo_height()
-                if w <= 10 or h <= 10:
-                    return
-
-                if self._date_text_id is None:
-                    self._date_shadow_id = self.datecard_canvas.create_text(
-                        (w // 2) + 1, (h // 2) + 1,
-                        anchor="center",
-                        text="",
-                        fill="#061a33" if self.is_day_theme else "#000000",
-                        font=self.f_date_line
-                    )
-                    self._date_text_id = self.datecard_canvas.create_text(
-                        w // 2, h // 2,
-                        anchor="center",
-                        text="",
-                        fill=datecard_fg,
-                        font=self.f_date_line
-                    )
-                else:
-                    shadow_id = self._date_shadow_id
-                    text_id = self._date_text_id
-
-                    if shadow_id is not None:
-                        self.datecard_canvas.coords(shadow_id, (w // 2) + 1, (h // 2) + 1)
-                    if text_id is not None:
-                        self.datecard_canvas.coords(text_id, w // 2, h // 2)
-
-            except Exception:
-                pass
-
-        self.datecard_canvas.bind("<Configure>", _draw_date_text)
-        self.after(0, _draw_date_text)
-
-        # Row 2: Relógio (agora com “glass” próprio para garantir contraste e conforto)
-        self.clockbox = tk.Frame(self.left_stack, bg=header_fill)
-        self.clockbox.grid(row=2, column=0, sticky="nsew")
-
-        if self.DEBUG_LAYOUT:
-            self.clockbox.configure(highlightthickness=2, highlightbackground="#ff0000")
-
-        mono_family = "Cascadia Mono"
-        try:
-            self.f_time_main = tkfont.Font(family=mono_family, size=34, weight="bold")
-        except Exception:
-            self.f_time_main = tkfont.Font(family="Consolas", size=34, weight="bold")
-
-        try:
-            self.f_time_sec = tkfont.Font(family=mono_family, size=22, weight="bold")
-        except Exception:
-            self.f_time_sec = tkfont.Font(family="Consolas", size=22, weight="bold")
-
-        # Contraste do texto no painel do header (relógio)
-        if self.is_day_theme:
-            self.header_onpanel_main = "#ffffff"
-            self.header_onpanel_soft = "#bcd3ff"
-        else:
-            self.header_onpanel_main = "#eaf2ff"
-            self.header_onpanel_soft = "#b9c7dd"
-
-        # ✅ clock “glass” (sem depender do fundo do header)
-        if self.is_day_theme:
-            clock_bg = self._blend_hex(panel_fill, "#ffffff", 0.08)
-            clock_border = self._blend_hex(panel_fill, "#ffffff", 0.14)
-            clock_shadow_stipple = "gray12"
-        else:
-            clock_bg = self._blend_hex("#0b223c", "#ffffff", 0.05)
-            clock_border = self._blend_hex("#132744", "#ffffff", 0.08)
-            clock_shadow_stipple = "gray12"
-
-        self._clockcard_h = 110
-
-        self.clockcard = RoundedFrame(
-            self.clockbox,
-            radius=RADIUS_MD,
-            bg=clock_bg,
-            border=clock_border,
-            shadow=True,
-            shadow_offset=SHADOW_SOFT,
-            shadow_stipple=clock_shadow_stipple,
-            gloss=True,
-            gloss_inset=3,
-            height=self._clockcard_h
-        )
-        self.clockcard.pack(fill="x", pady=(0, 0))
-        self.clockcard.pack_propagate(False)
-
-        self.clock_inner = tk.Frame(self.clockcard, bg=clock_bg)
-        self.clock_inner.place(relx=0.5, rely=0.5, anchor="center")
-
-        self.clock_center = tk.Frame(self.clock_inner, bg=clock_bg)
-        self.clock_center.pack(anchor="center")
-
-        self.time_hhmm_lbl = tk.Label(
-            self.clock_center,
-            text="00:00",
-            font=self.f_time_main,
-            fg=self.header_onpanel_main,
-            bg=clock_bg,
-            anchor="center"
-        )
-        self.time_hhmm_lbl.pack(side="left")
-
-        self.time_ss_lbl = tk.Label(
-            self.clock_center,
-            text=":00",
-            font=self.f_time_sec,
-            fg=self.header_onpanel_soft,
-            bg=clock_bg,
-            anchor="center"
-        )
-        self.time_ss_lbl.pack(side="left", padx=(4, 0))
-
-        if self.DEBUG_LAYOUT:
-            self.clockcard.configure(highlightthickness=2, highlightbackground="#ff66ff")
-
-        # RIGHT (hours + spacer + weather)
-        self.header_right = tk.Frame(self.header, bg=header_fill, width=right_w)
-        self.header_right.grid(
-            row=0,
-            column=1,
-            rowspan=2,
-            sticky="nsew",
-            padx=SP_12,
-            pady=(SP_8, SP_12)
-        )
-        self.header_right.lift()
-        self.header_right.grid_propagate(False)
-
-        self.header_right.grid_columnconfigure(0, weight=1)
-        self.header_right.grid_rowconfigure(0, weight=1)
-        self.header_right.grid_rowconfigure(1, weight=0)
-        self.header_right.grid_rowconfigure(2, weight=1)
-
-        self._right_vspacer_top = tk.Frame(self.header_right, bg=header_fill)
-        self._right_vspacer_top.grid(row=0, column=0, sticky="nsew")
-
-        self.right_center = tk.Frame(self.header_right, bg=header_fill)
-        self.right_center.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
-
-        self._right_vspacer_bottom = tk.Frame(self.header_right, bg=header_fill)
-        self._right_vspacer_bottom.grid(row=2, column=0, sticky="nsew")
-
-        self.right_center.grid_rowconfigure(0, weight=1)
-        self.right_center.grid_columnconfigure(0, weight=0)
-        self.right_center.grid_columnconfigure(1, weight=0)
-        self.right_center.grid_columnconfigure(2, weight=0)
-
-        self.hours_card = HoursCard(
-            self.right_center,
-            is_day_theme=self.is_day_theme,
-            rounded_frame_cls=RoundedFrame,
-        )
-        self.weather_card = WeatherCard(
-            self.right_center,
-            is_day_theme=self.is_day_theme,
-            ctx=ctx,
-            logger=log,
-        )
-
-        self.hours_card.grid(row=0, column=0, sticky="nsew")
-        spacer = tk.Frame(self.right_center, bg=header_fill, width=40)
-        spacer.grid(row=0, column=1, sticky="nsew")
-        self.weather_card.grid(row=0, column=2, sticky="nsew", pady=6)
-
-        self.hours_card.configure(width=hours_w, height=card_h)
-        self.weather_card.configure(width=weather_w, height=card_h)
-
-        self.hours_card.pack_propagate(False)
-        self.weather_card.pack_propagate(False)
-
-        if self.DEBUG_LAYOUT:
-            self.header_right.configure(highlightthickness=2, highlightbackground="#ff00ff")
-
-        # divider
-        self.div = tk.Frame(self, bg=self.bg_root, height=3)
-        self.div.pack(fill="x")
-
-        self.div_hi_line = tk.Frame(self.div, bg=self.div_hi, height=1)
-        self.div_hi_line.pack(fill="x", side="top")
-        self.div_lo_line = tk.Frame(self.div, bg=self.div_lo, height=2)
-        self.div_lo_line.pack(fill="x", side="top")
-
-        # main
-        self.main = tk.Frame(self, bg=self.bg_root)
-        self.main.pack(fill="both", expand=True)
-
-        self.main.grid_columnconfigure(0, weight=1, uniform="main")
-        self.main.grid_columnconfigure(1, weight=0)
-        self.main.grid_columnconfigure(2, weight=1, uniform="main")
-        self.main.grid_rowconfigure(0, weight=1)
-
-        self.vdiv = tk.Frame(self.main, bg="#1b3a5f", width=3)
-        self.vdiv.grid(row=0, column=1, sticky="ns", padx=6, pady=14)
-
-        self.agora = SectionFrame(
-            self.main,
-            "AGORA",
-            is_day_theme=self.is_day_theme,
-            rounded_frame_cls=RoundedFrame,
-            card_cls=ClassCard,
-        )
-        self.prox = SectionFrame(
-            self.main,
-            "PRÓXIMAS",
-            is_day_theme=self.is_day_theme,
-            rounded_frame_cls=RoundedFrame,
-            card_cls=ClassCard,
-        )
-
-        self.agora.grid(row=0, column=0, sticky="nsew", padx=(16, 8), pady=(10, 14))
-        self.prox.grid(row=0, column=2, sticky="nsew", padx=(8, 16), pady=(10, 14))
-
-        self.after(0, self._layout_update)
-
-    # -------------------------
-    # Layout update (resize-safe)
-    # -------------------------
+        build_main_ui(self, logger=log)
 
     def _layout_update(self):
         try:

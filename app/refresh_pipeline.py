@@ -246,3 +246,19 @@ def refresh_header_clock_and_hours(
 
     app._last_hours_minute_key = minute_key
     app.hours_card.update_view(force=False)
+
+def handle_theme_rebuild_if_needed(
+    app: Any,
+    *,
+    new_theme_is_day: bool,
+) -> bool:
+    if new_theme_is_day == app.is_day_theme:
+        return False
+
+    app._apply_theme()
+    app._build_ui()
+    app._reload_excel_if_needed(force=True)
+    app._last_weather_ui_key = None
+    app._last_agenda_run_ts = 0.0
+    app._last_hours_minute_key = None
+    return True

@@ -104,6 +104,7 @@ from app.main_ui_assets import (
 from app.refresh_pipeline import (
     apply_weather_result_if_changed,
     compute_now_next_cards,
+    handle_theme_rebuild_if_needed,
     refresh_agenda_if_due,
     refresh_header_clock_and_hours,
     reload_excel_if_needed,
@@ -666,13 +667,11 @@ class ClubalApp(tk.Tk):
     def _tick(self):
         try:
             new_theme = theme_is_day()
-            if new_theme != self.is_day_theme:
-                self._apply_theme()
-                self._build_ui()
-                self._reload_excel_if_needed(force=True)
-                self._last_weather_ui_key = None
-                self._last_agenda_run_ts = 0.0
-                self._last_hours_minute_key = None
+
+            handle_theme_rebuild_if_needed(
+                self,
+                new_theme_is_day=new_theme,
+            )
 
             _d, t, _wd = date_time_strings()
 

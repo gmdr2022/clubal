@@ -105,6 +105,7 @@ from app.refresh_pipeline import (
     apply_weather_result_if_changed,
     compute_now_next_cards,
     refresh_agenda_if_due,
+    refresh_header_clock_and_hours,
     reload_excel_if_needed,
     tick_weather_refresh,
 )
@@ -270,7 +271,7 @@ class ClubalApp(tk.Tk):
         self._reload_excel_if_needed(force=True)
         self._tick()
 
-        # ✅ antes: 9000 (9s). Agora mais confortável/premium:
+        # ✅ antes: 9000 (9s). Agora mais confortável:
         self.after(MS_HOURS_ROTATE, self._rotate_hours)
     # -------------------------
     # Helpers
@@ -675,40 +676,24 @@ class ClubalApp(tk.Tk):
 
             _d, t, _wd = date_time_strings()
 
-            # DateCard (texto no Canvas) - adaptativo ao espaço real
-            self._update_datecard_text_adaptive()
+            refresh_header_clock_and_hours(
+                self,
+                time_text=t,
+            )
 
-            # Relógio (HH:MM + :SS)
-            hhmm, ss = split_clock_hhmm_ss(t)
-            if hasattr(self, "time_hhmm_lbl"):
-                self.time_hhmm_lbl.configure(text=hhmm)
-            if hasattr(self, "time_ss_lbl"):
-                self.time_ss_lbl.configure(text=f":{ss}")
-
-            # HoursCard: só recalcula quando muda o minuto
-            now = time.localtime()
-            minute_key = (now.tm_wday, now.tm_hour, now.tm_min, getattr(self.hours_card, "_mode", 0))
-            if minute_key != self._last_hours_minute_key:
-                self._last_hours_minute_key = minute_key
-                self.hours_card.update_view(force=False)
-
-            # Excel
             self._reload_excel_if_needed(force=False)
 
-            # Agenda
             refresh_agenda_if_due(
                 self,
                 min_interval_sec=15,
             )
 
-            # Weather fetch
             tick_weather_refresh(
                 self,
                 app_dir=str(self.ctx.paths.app_dir),
                 logger=log,
             )
 
-            # Weather UI: só quando mudou
             apply_weather_result_if_changed(
                 self,
                 city_label="Alfenas",

@@ -10,6 +10,7 @@ from core.agenda import compute_now_next as agenda_compute_now_next
 from core.card_metrics import minutes_until, remaining_progress, upcoming_progress
 from core.models import ClassItem
 from infra.xlsx_loader import reload_classes_if_needed
+from core.time_utils import split_clock_hhmm_ss
 
 WEATHER_CITY_LABEL = "Alfenas"
 WEATHER_LAT = -21.4267
@@ -216,3 +217,32 @@ def refresh_agenda_if_due(
     now_cards, next_cards = app._compute_now_next()
     app.agora.update_cards(now_cards)
     app.prox.update_cards(next_cards)
+
+def refresh_header_clock_and_hours(
+    app: Any,
+    *,
+    time_text: str,
+    now_struct: Any = None,
+) -> None:
+    app._update_datecard_text_adaptive()
+
+    hhmm, ss = split_clock_hhmm_ss(time_text)
+    if hasattr(app, "time_hhmm_lbl"):
+        app.time_hhmm_lbl.configure(text=hhmm)
+    if hasattr(app, "time_ss_lbl"):
+        app.time_ss_lbl.configure(text=f":{ss}")
+
+    if now_struct is None:
+        now_struct = time.localtime()
+
+    minute_key = (
+        now_struct.tm_wday,
+        now_struct.tm_hour,
+        now_struct.tm_min,
+        getattr(app.hours_card, "_mode", 0),
+    )
+    if minute_key == app._last_hours_minute_key:
+        return
+
+    app._last_hours_minute_key = minute_key
+    app.hours_card.update_view(force=False)

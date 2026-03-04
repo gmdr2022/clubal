@@ -88,17 +88,8 @@ from app.main_ui_assets import (
     refresh_logo,
 )
 
-from app.refresh_pipeline import (
-    apply_weather_result_if_changed,
-    compute_now_next_cards,
-    handle_theme_rebuild_if_needed,
-    refresh_agenda_if_due,
-    refresh_header_clock_and_hours,
-    reload_excel_if_needed,
-    tick_weather_refresh,
-)
-
 from app.tick_runtime import run_tick_cycle, schedule_next_tick
+from app.refresh_pipeline import reload_excel_state_if_needed
 
 ctx = bootstrap()
 
@@ -258,7 +249,12 @@ class ClubalApp(tk.Tk):
 
         self.bind("<Configure>", self._on_root_configure)
 
-        self._reload_excel_if_needed(force=True)
+        reload_excel_state_if_needed(
+            self,
+            excel_path=EXCEL_PATH,
+            force=True,
+            logger=log,
+        )
         self._tick()
 
         # ✅ antes: 9000 (9s). Agora mais confortável:
@@ -599,48 +595,6 @@ class ClubalApp(tk.Tk):
             self.after(16000, self._rotate_hours)
 
     # -------------------------
-    # Excel reload
-    # -------------------------
-    def _reload_excel_if_needed(self, force: bool = False):
-        self.all_items, self.last_excel_mtime = reload_excel_if_needed(
-            EXCEL_PATH,
-            self.all_items,
-            self.last_excel_mtime,
-            force=force,
-            logger=log,
-        )
-
-    # -------------------------
-    # Agenda compute
-    # -------------------------
-    def _compute_now_next(self) -> Tuple[List[Tuple], List[Tuple]]:
-        now_dt = datetime.now()
-
-        now_cards, next_cards, window_end, discard_day, discard_time, discard_other = compute_now_next_cards(
-            now_dt=now_dt,
-            all_items=self.all_items,
-            window_minutes=120,
-            log_fn=log,
-        )
-
-        if self.all_items and (len(now_cards) == 0 and len(next_cards) == 0):
-            if time.time() - self._last_zero_agenda_log_ts > 60:
-                self._last_zero_agenda_log_ts = time.time()
-                sample = self.all_items[:4]
-                log(
-                    "[AGENDA] 0 em AGORA/PRÓXIMAS | "
-                    f"now={now_dt.strftime('%Y-%m-%d %H:%M:%S')} "
-                    f"window_end={window_end.strftime('%Y-%m-%d %H:%M:%S')} "
-                    f"today_code={today_3letters_noaccent()} "
-                    f"discard_day={discard_day} "
-                    f"discard_time={discard_time} "
-                    f"discard_other={discard_other} "
-                    f"sample_items={sample}"
-                )
-
-        return now_cards, next_cards
-
-    # -------------------------
     # Main tick
     # -------------------------
     def _tick(self):
@@ -652,6 +606,7 @@ class ClubalApp(tk.Tk):
                 self,
                 new_theme_is_day=new_theme,
                 time_text=t,
+                excel_path=EXCEL_PATH,
                 app_dir=str(self.ctx.paths.app_dir),
                 log_path=LOG_PATH,
                 log_archive_dir=LOG_ARCHIVE_DIR,

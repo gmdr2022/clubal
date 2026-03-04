@@ -11,6 +11,7 @@ from app.refresh_pipeline import (
     handle_theme_rebuild_if_needed,
     refresh_agenda_if_due,
     refresh_header_clock_and_hours,
+    reload_excel_state_if_needed,
     tick_weather_refresh,
 )
 
@@ -38,6 +39,7 @@ def tick_housekeeping_if_due(
         if logger:
             logger(f"[HK] error {type(e).__name__}: {e}")
 
+
 def schedule_next_tick(
     app: Any,
     tick_callback,
@@ -46,11 +48,13 @@ def schedule_next_tick(
 ) -> None:
     app.after(delay_ms, tick_callback)
 
+
 def run_tick_cycle(
     app: Any,
     *,
     new_theme_is_day: bool,
     time_text: str,
+    excel_path: str,
     app_dir: str,
     log_path: Optional[str],
     log_archive_dir: Optional[str],
@@ -59,6 +63,8 @@ def run_tick_cycle(
     handle_theme_rebuild_if_needed(
         app,
         new_theme_is_day=new_theme_is_day,
+        excel_path=excel_path,
+        logger=logger,
     )
 
     refresh_header_clock_and_hours(
@@ -66,11 +72,17 @@ def run_tick_cycle(
         time_text=time_text,
     )
 
-    app._reload_excel_if_needed(force=False)
+    reload_excel_state_if_needed(
+        app,
+        excel_path=excel_path,
+        force=False,
+        logger=logger,
+    )
 
     refresh_agenda_if_due(
         app,
         min_interval_sec=15,
+        logger=logger,
     )
 
     tick_weather_refresh(

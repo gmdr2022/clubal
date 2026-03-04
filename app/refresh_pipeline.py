@@ -9,8 +9,8 @@ import weather_service as weather_mod
 from core.agenda import compute_now_next as agenda_compute_now_next
 from core.card_metrics import minutes_until, remaining_progress, upcoming_progress
 from core.models import ClassItem
-from infra.xlsx_loader import reload_classes_if_needed
 from core.time_utils import split_clock_hhmm_ss
+from infra.xlsx_loader import reload_classes_if_needed
 
 WEATHER_CITY_LABEL = "Alfenas"
 WEATHER_LAT = -21.4267
@@ -35,6 +35,22 @@ def reload_excel_if_needed(
         logger=logger,
     )
     return all_items, last_excel_mtime
+
+
+def reload_excel_state_if_needed(
+    app: Any,
+    *,
+    excel_path: str,
+    force: bool = False,
+    logger=None,
+) -> None:
+    app.all_items, app.last_excel_mtime = reload_excel_if_needed(
+        excel_path,
+        app.all_items,
+        app.last_excel_mtime,
+        force=force,
+        logger=logger,
+    )
 
 
 def compute_now_next_cards(
@@ -204,19 +220,29 @@ def apply_weather_result_if_changed(
     app._last_weather_ui_key = key
     app.weather_card.set_weather(city_label, res)
 
+
 def refresh_agenda_if_due(
     app: Any,
     *,
     min_interval_sec: int = 15,
+    logger: Optional[Callable[[str], None]] = None,
 ) -> None:
     if time.time() - app._last_agenda_run_ts < min_interval_sec:
         return
 
     app._last_agenda_run_ts = time.time()
 
-    now_cards, next_cards = app._compute_now_next()
+    now_dt = datetime.now()
+    now_cards, next_cards, _window_end, _discard_day, _discard_time, _discard_other = compute_now_next_cards(
+        now_dt=now_dt,
+        all_items=app.all_items,
+        window_minutes=120,
+        log_fn=logger,
+    )
+
     app.agora.update_cards(now_cards)
     app.prox.update_cards(next_cards)
+
 
 def refresh_header_clock_and_hours(
     app: Any,
@@ -247,17 +273,25 @@ def refresh_header_clock_and_hours(
     app._last_hours_minute_key = minute_key
     app.hours_card.update_view(force=False)
 
+
 def handle_theme_rebuild_if_needed(
     app: Any,
     *,
     new_theme_is_day: bool,
+    excel_path: str,
+    logger: Optional[Callable[[str], None]] = None,
 ) -> bool:
     if new_theme_is_day == app.is_day_theme:
         return False
 
     app._apply_theme()
     app._build_ui()
-    app._reload_excel_if_needed(force=True)
+    reload_excel_state_if_needed(
+        app,
+        excel_path=excel_path,
+        force=True,
+        logger=logger,
+    )
     app._last_weather_ui_key = None
     app._last_agenda_run_ts = 0.0
     app._last_hours_minute_key = None

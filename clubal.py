@@ -111,6 +111,8 @@ from app.refresh_pipeline import (
     tick_weather_refresh,
 )
 
+from app.tick_runtime import tick_housekeeping_if_due
+
 ctx = bootstrap()
 
 from infra.xlsx_loader import reload_classes_if_needed
@@ -651,16 +653,6 @@ class ClubalApp(tk.Tk):
 
         return now_cards, next_cards
 
-    def _tick_housekeeping(self):
-        if time.time() - self._last_housekeeping_ts < 86400:
-            return
-        self._last_housekeeping_ts = time.time()
-        try:
-            rotate_logs_if_needed(LOG_PATH, LOG_ARCHIVE_DIR, logger=log)
-            weather_mod.housekeeping(app_dir=str(self.ctx.paths.app_dir), logger=log)
-        except Exception as e:
-            log(f"[HK] error {type(e).__name__}: {e}")
-
     # -------------------------
     # Main tick
     # -------------------------
@@ -698,7 +690,14 @@ class ClubalApp(tk.Tk):
                 city_label="Alfenas",
             )
 
-            self._tick_housekeeping()
+            tick_housekeeping_if_due(
+                self,
+                log_path=LOG_PATH,
+                log_archive_dir=LOG_ARCHIVE_DIR,
+                app_dir=str(self.ctx.paths.app_dir),
+                logger=log,
+                min_interval_sec=86400,
+            )
 
         except Exception:
             log("Tick error:\n" + traceback.format_exc())

@@ -1,17 +1,4 @@
-
-"""
-CLUBAL – Club Agenda Live
-
-App Tkinter em tela cheia para sinalização digital:
-- Lê grade.xlsx (aba CLUBAL) e mostra AGORA/PRÓXIMAS com scroll contínuo.
-- Mostra horários fixos (HoursCard) e clima (WeatherCard) com cache via weather_service.py.
-- Registra logs em diretório gravável por usuário.
-
-Estrutura do arquivo (candidato a divisão futura):
-- Infra/IO: paths, logging, excel parsing, agenda compute
-- UI widgets: RoundedFrame, ClassCard, SectionFrame, HoursCard, WeatherCard
-- App: ClubalApp (build UI, ticks, theme, integração)
-"""
+# CLUBAL – Club Agenda Live
 
 from __future__ import annotations
 
@@ -111,7 +98,7 @@ from app.refresh_pipeline import (
     tick_weather_refresh,
 )
 
-from app.tick_runtime import schedule_next_tick, tick_housekeeping_if_due
+from app.tick_runtime import run_tick_cycle, schedule_next_tick
 
 ctx = bootstrap()
 
@@ -659,44 +646,16 @@ class ClubalApp(tk.Tk):
     def _tick(self):
         try:
             new_theme = theme_is_day()
+            _, t, _ = date_time_strings()
 
-            handle_theme_rebuild_if_needed(
+            run_tick_cycle(
                 self,
                 new_theme_is_day=new_theme,
-            )
-
-            _d, t, _wd = date_time_strings()
-
-            refresh_header_clock_and_hours(
-                self,
                 time_text=t,
-            )
-
-            self._reload_excel_if_needed(force=False)
-
-            refresh_agenda_if_due(
-                self,
-                min_interval_sec=15,
-            )
-
-            tick_weather_refresh(
-                self,
                 app_dir=str(self.ctx.paths.app_dir),
-                logger=log,
-            )
-
-            apply_weather_result_if_changed(
-                self,
-                city_label="Alfenas",
-            )
-
-            tick_housekeeping_if_due(
-                self,
                 log_path=LOG_PATH,
                 log_archive_dir=LOG_ARCHIVE_DIR,
-                app_dir=str(self.ctx.paths.app_dir),
                 logger=log,
-                min_interval_sec=86400,
             )
 
         except Exception:

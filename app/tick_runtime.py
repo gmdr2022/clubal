@@ -6,6 +6,14 @@ from typing import Any, Callable, Optional
 import weather_service as weather_mod
 from infra.logging_manager import rotate_logs_if_needed
 
+from app.refresh_pipeline import (
+    apply_weather_result_if_changed,
+    handle_theme_rebuild_if_needed,
+    refresh_agenda_if_due,
+    refresh_header_clock_and_hours,
+    tick_weather_refresh,
+)
+
 
 def tick_housekeeping_if_due(
     app: Any,
@@ -37,3 +45,50 @@ def schedule_next_tick(
     delay_ms: int = 1000,
 ) -> None:
     app.after(delay_ms, tick_callback)
+
+def run_tick_cycle(
+    app: Any,
+    *,
+    new_theme_is_day: bool,
+    time_text: str,
+    app_dir: str,
+    log_path: Optional[str],
+    log_archive_dir: Optional[str],
+    logger: Optional[Callable[[str], None]] = None,
+) -> None:
+    handle_theme_rebuild_if_needed(
+        app,
+        new_theme_is_day=new_theme_is_day,
+    )
+
+    refresh_header_clock_and_hours(
+        app,
+        time_text=time_text,
+    )
+
+    app._reload_excel_if_needed(force=False)
+
+    refresh_agenda_if_due(
+        app,
+        min_interval_sec=15,
+    )
+
+    tick_weather_refresh(
+        app,
+        app_dir=app_dir,
+        logger=logger,
+    )
+
+    apply_weather_result_if_changed(
+        app,
+        city_label="Alfenas",
+    )
+
+    tick_housekeeping_if_due(
+        app,
+        log_path=log_path,
+        log_archive_dir=log_archive_dir,
+        app_dir=app_dir,
+        logger=logger,
+        min_interval_sec=86400,
+    )

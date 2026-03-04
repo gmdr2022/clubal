@@ -111,7 +111,7 @@ from app.refresh_pipeline import (
     tick_weather_refresh,
 )
 
-from app.tick_runtime import tick_housekeeping_if_due
+from app.tick_runtime import schedule_next_tick, tick_housekeeping_if_due
 
 ctx = bootstrap()
 
@@ -702,7 +702,11 @@ class ClubalApp(tk.Tk):
         except Exception:
             log("Tick error:\n" + traceback.format_exc())
 
-        self.after(1000, self._tick)
+        schedule_next_tick(
+            self,
+            self._tick,
+            delay_ms=1000,
+        )
 
 if __name__ == "__main__":
     try:

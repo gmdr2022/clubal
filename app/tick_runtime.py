@@ -29,3 +29,11 @@ def tick_housekeeping_if_due(
     except Exception as e:
         if logger:
             logger(f"[HK] error {type(e).__name__}: {e}")
+
+def schedule_next_tick(
+    app: Any,
+    tick_callback,
+    *,
+    delay_ms: int = 1000,
+) -> None:
+    app.after(delay_ms, tick_callback)

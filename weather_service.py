@@ -32,6 +32,13 @@ import time
 import threading
 from typing import Any, Dict, Optional, Tuple
 from weather.models import WeatherResult
+from weather.config import (
+    WEATHER_LAT,
+    WEATHER_LON,
+    WEATHER_PLACE_CITY,
+    WEATHER_PLACE_UF,
+    get_place_display,
+)
 import urllib.request
 import urllib.error
 
@@ -151,27 +158,6 @@ def _migrate_legacy_weather_storage(app_dir: str, logger=None) -> None:
 
     except Exception:
         pass
-
-# ============================================================
-# config (fonte única de verdade local – pode virar arquivo depois)
-# ============================================================
-
-WEATHER_PLACE_CITY = "Alfenas"   # <<< cidade (ex: "Varginha")
-WEATHER_PLACE_UF = "MG"          # <<< UF (ex: "SP", "RJ", "RS")
-WEATHER_LAT = -21.4267           # <<< latitude
-WEATHER_LON = -45.9470           # <<< longitude
-
-
-def get_place_display() -> str:
-    """
-    Exibição padronizada para topo do WeatherCard.
-    Ex: "ALFENAS - MG"
-    """
-    city = (WEATHER_PLACE_CITY or "").strip().upper()
-    uf = (WEATHER_PLACE_UF or "").strip().upper()
-    if city and uf:
-        return f"{city} - {uf}"
-    return city or uf or "LOCAL"
 
 # ============================================================
 # cache policy / housekeeping

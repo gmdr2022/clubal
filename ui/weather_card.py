@@ -28,6 +28,13 @@ from ui.weather_card_marquee import (
     stop_forecast_marquee,
     stop_top_marquee,
 )
+from ui.weather_card_draw import (
+    draw_background,
+    draw_frame,
+    glass_panel,
+    pil_cover_to_size,
+    tag_bar,
+)
 import weather_service as weather_mod
 
 
@@ -560,148 +567,17 @@ class WeatherCard(tk.Frame):
             self.canvas.create_rectangle(0, 0, w, h, fill=self.base_bg, outline="")
             self._draw_frame(w, h)
 
-    # -------------------------
-    # Drawing
-    # -------------------------
-
     def _pil_cover_to_size(self, p: str, w: int, h: int):
-        im = _pil_open_rgba(p)
-        iw, ih = im.size
-        if iw <= 0 or ih <= 0:
-            return None
-
-        scale = max(w / iw, h / ih)
-        nw = max(1, int(iw * scale))
-        nh = max(1, int(ih * scale))
-        im = im.resize((nw, nh), PIL_LANCZOS)
-
-        left = max(0, (nw - w) // 2)
-        top = max(0, (nh - h) // 2)
-        im = im.crop((left, top, left + w, top + h))
-
-        return _pil_photo_image(im)
+        return pil_cover_to_size(self, p=p, w=w, h=h)
 
     def _draw_background(self, w: int, h: int):
-        bg_name = "weather_day" if self.is_day_theme else "weather_night"
-        p = _img_path_try(bg_name)
-
-        try:
-            self._log(f"[WEATHER][BG] PIL_OK={PIL_OK} bg_name={bg_name} path={p} exists={bool(p and os.path.exists(p))}")
-        except Exception:
-            pass
-
-        key = (p, w, h, "PIL" if PIL_OK else "TK")
-        if key != self._bg_key:
-            self._bg_key = key
-            self._bg_img = None
-
-            if p and os.path.exists(p):
-                if PIL_OK:
-                    try:
-                        self._bg_img = self._pil_cover_to_size(p, w, h)
-                        try:
-                            self._log(f"[WEATHER][BG] loaded via PIL size={w}x{h}")
-                        except Exception:
-                            pass
-                    except Exception:
-                        self._bg_img = None
-                        try:
-                            self._log("[WEATHER][BG] PIL load failed:\n" + traceback.format_exc())
-                        except Exception:
-                            pass
-
-                if self._bg_img is None:
-                    try:
-                        img = tk.PhotoImage(file=p)
-                        if img.width() > w or img.height() > h:
-                            fx = max(1, img.width() // max(1, w))
-                            fy = max(1, img.height() // max(1, h))
-                            f = max(fx, fy)
-                            img = img.subsample(f)
-                        self._bg_img = img
-                        try:
-                            self._log(f"[WEATHER][BG] loaded via TK orig={img.width()}x{img.height()} canvas={w}x{h}")
-                        except Exception:
-                            pass
-                    except Exception:
-                        self._bg_img = None
-                        try:
-                            self._log("[WEATHER][BG] TK PhotoImage load failed:\n" + traceback.format_exc())
-                        except Exception:
-                            pass
-
-        if self._bg_img:
-            self.canvas.create_image(0, 0, anchor="nw", image=self._bg_img)
-        else:
-            self.canvas.create_rectangle(0, 0, w, h, fill=self.base_bg, outline="")
-
-        if self._bg_img:
-            self.canvas.create_image(0, 0, anchor="nw", image=self._bg_img)
-        else:
-            self.canvas.create_rectangle(0, 0, w, h, fill=self.base_bg, outline="")
+        draw_background(self, w=w, h=h)
 
     def _draw_frame(self, w: int, h: int):
-        pad = 6
-        self.canvas.create_rectangle(pad, pad, w - pad, h - pad, outline=self.border, width=2)
-        self.canvas.create_line(pad + 2, pad + 2, w - pad - 2, pad + 2, fill=self.line_soft, width=2)
+        draw_frame(self, w=w, h=h)
 
     def _glass_panel(self, x1, y1, x2, y2):
-        w = int(max(1, x2 - x1))
-        h = int(max(1, y2 - y1))
-
-        if not PIL_OK:
-            self.canvas.create_rectangle(x1, y1, x2, y2, fill=self.glass_fill, outline="")
-            self.canvas.create_rectangle(x1, y1, x2, y2, outline=self.glass_edge, width=1)
-            inset = 2
-            self.canvas.create_rectangle(x1 + inset, y1 + inset, x2 - inset, y2 - inset, outline=self.glass_low, width=1)
-            self.canvas.create_line(x1 + 3, y1 + 3, x2 - 3, y1 + 3, fill=self.glass_high, width=1)
-            return
-
-        alpha = int(max(35, min(180, getattr(self, "_glass_alpha", 105))))
-        key = (w, h, alpha)
-
-        img = self._glass_img_cache.get(key)
-
-        if img is None:
-            try:
-                base_hex = (self.glass_fill or "#0a2a55").lstrip("#")
-                r = int(base_hex[0:2], 16)
-                g = int(base_hex[2:4], 16)
-                b = int(base_hex[4:6], 16)
-
-                im = _pil_new_rgba((w, h), (r, g, b, alpha))
-
-                top_boost = 22
-                bot_drop = 18
-                for yy in range(h):
-                    t = yy / max(1, (h - 1))
-                    rr = int(r + (top_boost * (1.0 - t)) - (bot_drop * t))
-                    gg = int(g + (top_boost * (1.0 - t)) - (bot_drop * t))
-                    bb = int(b + (top_boost * (1.0 - t)) - (bot_drop * t))
-                    rr = max(0, min(255, rr))
-                    gg = max(0, min(255, gg))
-                    bb = max(0, min(255, bb))
-                    im.putpixel((0, yy), (rr, gg, bb, alpha))
-
-                col = im.crop((0, 0, 1, h)).resize((w, h), PIL_NEAREST)
-                img = _pil_photo_image(col)
-                self._glass_img_cache[key] = img
-            except Exception:
-                img = None
-                self._glass_img_cache[key] = None
-
-        if img is not None:
-            self._glass_img_refs.append(img)
-            if len(self._glass_img_refs) > 60:
-                self._glass_img_refs = self._glass_img_refs[-30:]
-            self.canvas.create_image(x1, y1, anchor="nw", image=img)
-        else:
-            self.canvas.create_rectangle(x1, y1, x2, y2, fill=self.glass_fill, outline="")
-
-        self.canvas.create_rectangle(x1, y1, x2, y2, outline=self.glass_edge, width=1)
-        inset = 2
-        self.canvas.create_rectangle(x1 + inset, y1 + inset, x2 - inset, y2 - inset, outline=self.glass_low, width=1)
-        self.canvas.create_line(x1 + 3, y1 + 3, x2 - 3, y1 + 3, fill=self.glass_high, width=1)
+        glass_panel(self, x1=x1, y1=y1, x2=x2, y2=y2)
 
     def _draw_layout(self, w: int, h: int):
         pad = 12
@@ -923,36 +799,13 @@ class WeatherCard(tk.Frame):
 
     def _tag_bar(self, x1: int, y1: int, x2: int, y2: int, text: str,
                  fill: str, edge: str, txt: str, font_obj: tkfont.Font):
-        w = int(x2 - x1)
-        h = int(y2 - y1)
-
-        if w < 40 or h < 16:
-            pid = self.canvas.create_rectangle(x1, y1, x2, y2, fill=fill, outline=edge, width=1)
-            tid = self.canvas.create_text((x1 + x2) // 2, (y1 + y2) // 2,
-                                          text=(text or "").strip(), fill=txt, font=font_obj)
-            return pid, tid
-
-        r = max(8, min(14, h // 2))
-        pts = [
-            x1 + r, y1,
-            x2 - r, y1,
-            x2, y1 + r,
-            x2, y2 - r,
-            x2 - r, y2,
-            x1 + r, y2,
-            x1, y2 - r,
-            x1, y1 + r,
-        ]
-
-        pid = self.canvas.create_polygon(pts, fill=fill, outline=edge, width=1, smooth=True)
-        tid = self.canvas.create_text(
-            (x1 + x2) // 2, (y1 + y2) // 2,
-            anchor="center",
-            text=(text or "").strip(),
-            fill=txt,
-            font=font_obj
+        return tag_bar(
+            self,
+            x1=x1, y1=y1, x2=x2, y2=y2,
+            text=text,
+            fill=fill, edge=edge, txt=txt,
+            font_obj=font_obj
         )
-        return pid, tid
 
     def _update_text_items(self):
         # Atualiza esquerda do topo (CLIMA/CIDADE) e reposiciona se necessário via redraw leve

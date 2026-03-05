@@ -10,15 +10,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 
 from ui.theme import MS_MARQUEE_TICK, MS_MARQUEE_SPEED_PX
-from ui.image_runtime import (
-    PIL_OK,
-    PIL_LANCZOS,
-    PIL_NEAREST,
-    img_path_try as _img_path_try,
-    pil_new_rgba as _pil_new_rgba,
-    pil_open_rgba as _pil_open_rgba,
-    pil_photo_image as _pil_photo_image,
-)
+from ui.image_runtime import img_path_try as _img_path_try
 
 from ui.weather_card_marquee import (
     ensure_forecast_marquee_widgets,
@@ -35,8 +27,12 @@ from ui.weather_card_draw import (
     pil_cover_to_size,
     tag_bar,
 )
+from ui.weather_card_icons_ui import (
+    place_icon,
+    pil_icon_to_size,
+    update_icon,
+)
 import weather_service as weather_mod
-
 
 class WeatherCard(tk.Frame):
     """
@@ -849,87 +845,14 @@ class WeatherCard(tk.Frame):
     # -------------------------
     # Icon
     # -------------------------
-
     def _pil_icon_to_size(self, p: str, target: int):
-        im = _pil_open_rgba(p)
-        iw, ih = im.size
-        if iw <= 0 or ih <= 0:
-            return None
-        scale = min(target / iw, target / ih)
-        nw = max(1, int(iw * scale))
-        nh = max(1, int(ih * scale))
-        im = im.resize((nw, nh), PIL_LANCZOS)
-
-        canvas = _pil_new_rgba((target, target), (0, 0, 0, 0))
-        x = (target - nw) // 2
-        y = (target - nh) // 2
-        canvas.paste(im, (x, y), im)
-        return _pil_photo_image(canvas)
+        return pil_icon_to_size(p=p, target=target)
 
     def _update_icon(self, icon_path: Optional[str]):
-        if not icon_path or not os.path.exists(icon_path):
-            self._icon_img = None
-            self._icon_key = None
-            return
-
-        target = 112
-        if self._layout_geom:
-            try:
-                target = int(self._layout_geom.get("icon_target", target))
-            except Exception:
-                target = target
-
-        target = max(64, int(target))
-
-        key = (icon_path, target, "PIL" if PIL_OK else "TK")
-        if key == self._icon_key:
-            return
-        self._icon_key = key
-
-        self._icon_img = None
-        try:
-            if PIL_OK:
-                try:
-                    self._icon_img = self._pil_icon_to_size(icon_path, target)
-                except Exception:
-                    self._icon_img = None
-
-            if self._icon_img is None:
-                img = tk.PhotoImage(file=icon_path)
-                if img.width() > target or img.height() > target:
-                    fx = max(1, img.width() // max(1, target))
-                    fy = max(1, img.height() // max(1, target))
-                    f = max(fx, fy)
-                    img = img.subsample(f)
-                self._icon_img = img
-        except Exception:
-            self._icon_img = None
+        update_icon(self, icon_path=icon_path)
 
     def _place_icon(self):
-        if not self._layout_geom or "icon_box" not in self._layout_geom:
-            return
-
-        if "icon_img" in self._ids:
-            try:
-                self.canvas.delete(self._ids["icon_img"])
-            except Exception:
-                pass
-            self._ids.pop("icon_img", None)
-
-        if not self._icon_img:
-            return
-
-        try:
-            cx, cy = self._layout_geom.get("icon_center", (None, None))
-        except Exception:
-            cx, cy = (None, None)
-
-        if cx is None or cy is None:
-            x1, y1, x2, y2 = self._layout_geom["icon_box"]
-            cx = (x1 + x2) // 2
-            cy = (y1 + y2) // 2
-
-        self._ids["icon_img"] = self.canvas.create_image(int(cx), int(cy), anchor="center", image=self._icon_img)
+        place_icon(self)
 
     def dispose(self) -> None:
         self._disposed = True

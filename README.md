@@ -1,228 +1,149 @@
 # CLUBAL — Club Agenda Live
 
-CLUBAL is a lightweight digital signage application built with **Python + Tkinter** for institutional screens, TVs, low-end PCs, and portable/offline environments.
+CLUBAL is a lightweight **Python + Tkinter** digital signage application built for institutional screens (PCs/TVs), including low-end or restricted Windows machines and offline/unstable networks.
 
-It is designed to remain operational in places where heavier dashboard stacks are a bad fit:
+Design goals:
 
-- Windows TVs
-- older or restricted corporate PCs
-- unstable or offline environments
-- portable / pendrive-style deployments
+- **Offline-first** (graceful degradation)
+- **Fast startup** and low resource usage
+- **Simple operation** (TV-friendly)
+- **Modular, maintainable codebase** (incremental refactors without behavior changes)
 
 ---
 
-## Current project status
+## What it does
 
-Current architectural direction is defined in:
-
-- `docs/02_ROADMAP_TECHNICAL.md`
-- `docs/03_ROADMAP_PRODUCT.md`
-
-The current implementation priority is:
-
-1. preserve runtime stability
-2. preserve offline-first behavior
-3. continue controlled modularization
-4. reduce `clubal.py` into orchestration over time
+- Reads an Excel schedule and shows **AGORA** (Now) and **PRÓXIMAS** (Next) items.
+- Shows a header with date/time and operational info.
+- Optionally shows weather with local cache and icon handling.
 
 ---
 
 ## Tech stack
 
-- **Python**
-- **Tkinter**
-- **openpyxl**
-- **Pillow** (optional but important for better PNG/image compatibility)
-- local Excel-based content source (`grade.xlsx` at runtime)
+- Python
+- Tkinter
+- openpyxl
+- Pillow (optional, recommended for better PNG compatibility)
 
 ---
 
 ## Repository structure
 
 ```text
-app/                 runtime/bootstrap integration helpers
-core/                pure logic, domain helpers, metrics, text/date utilities, paths, models
-docs/                roadmap and project documentation
-graphics/            logos, icons and visual assets
-infra/               IO/integration helpers such as logging and xlsx loading
-ui/                  extracted UI modules and layout helpers
+app/                 runtime orchestration helpers (refresh/ticks/scheduling)
+core/                domain logic (agenda, text/date helpers, metrics, bootstrap helpers)
+docs/                documentation (prefer stable/evergreen docs)
+graphics/            logos and visual assets
+infra/               IO/integration helpers (logging, xlsx loading)
+ui/                  UI modules and widgets
+weather/             modularized weather backend package (canonical implementation)
+
 clubal.py            main application entrypoint / orchestrator
-weather_service.py   weather backend module
-grade_template.xlsx  repository spreadsheet template
+weather_service.py   weather backend compatibility shim (re-exports from weather/)
+grade_template.xlsx  repository spreadsheet template (versioned)
 ```
 
 ---
 
-## Entry points by concern
+## Key entry points (where to change what)
 
-### Main runtime
+### App startup / orchestration
 
 - `clubal.py`
-- `core/bootstrap.py`
+- `app/` (tick scheduling + refresh pipeline)
 
-Use these first when the task involves:
-
-- app startup
-- environment detection
-- top-level wiring
+Use when working on:
+- startup wiring
 - screen orchestration
-- integration between modules
+- tick timing / scheduling
 
-### Header UI
-
-- `clubal.py`
-- `ui/header_layout.py`
-- `core/date_text.py`
-- `core/ptbr_text.py`
-
-Use these first when the task involves:
-
-- header geometry
-- date card text
-- clock/date rendering
-- logos
-- top section layout
-
-### Agenda / schedule logic
+### Agenda (AGORA / PRÓXIMAS)
 
 - `core/agenda.py`
-- `core/card_metrics.py`
 - `infra/xlsx_loader.py`
+- `core/card_metrics.py`
 
-Use these first when the task involves:
+Use when working on:
+- schedule parsing
+- filtering / time windows
+- progress/remaining-time bars
 
-- AGORA / PRÓXIMAS logic
-- schedule filtering
-- progress / remaining time
-- Excel loading and reload flow
+### Weather (backend)
 
-### Weather
+Canonical implementation:
+- `weather/facade.py` (public API)
+- `weather/*` (cache/net/icons/forecast/service)
 
-- `weather_service.py`
+Compatibility:
+- `weather_service.py` keeps legacy imports working (shim)
 
-Use this first when the task involves:
+Use when working on:
+- fetching forecast
+- cache policy
+- offline fallback
 
-- forecast fetching
-- weather cache
-- offline weather fallback
-- weather icon handling
+### Weather (UI)
 
-### Logging / runtime diagnostics
+- `ui/weather_card.py` (WeatherCard widget)
+- `ui/header_weather.py` (compat shim → WeatherCard)
+- `ui/weather_card_marquee.py` (marquee helpers)
+- `ui/weather_card_draw.py` (drawing helpers)
+- `ui/weather_card_icons_ui.py` (icon UI helpers)
+
+Use when working on:
+- WeatherCard layout/render
+- marquee behavior
+- icon placement
+
+### Logging / diagnostics
 
 - `infra/logging_manager.py`
 
-Use this first when the task involves:
-
-- logs
+Use when working on:
+- log paths
 - rotation
-- runtime diagnostics
-- operational tracing
-
-### Assets / branding
-
-- `graphics/`
-
-Use this first when the task involves:
-
-- logos
-- icons
-- institutional branding
-- client-specific image assets
+- operational traces
 
 ---
 
-## Runtime spreadsheet model
+## Spreadsheet model
 
-Repository reference:
-
-- `grade_template.xlsx`
-
-Local runtime file:
-
-- `grade.xlsx`
+- `grade_template.xlsx` is the **versioned** template kept in the repository.
+- `grade.xlsx` is the **local runtime** schedule file.
 
 Important:
-
-- `grade_template.xlsx` is the versioned spreadsheet model kept in the repository
-- `grade.xlsx` is the local working spreadsheet used by the application at runtime
-- `grade.xlsx` must stay out of version control
+- Do **not** commit `grade.xlsx`.
 
 ---
 
-## Local-only / ignored artifacts
+## Documentation philosophy (important)
 
-The repository is intended to ignore local operational artifacts such as:
+Docs in `docs/` should be **stable and evergreen** whenever possible.
 
-- `grade.xlsx`
-- `.zip` artifacts
-- temporary runtime outputs
-- machine-specific generated files
+- Avoid updating docs for every roadmap step.
+- Update docs only for **real contract changes**:
+  - breaking API/module boundaries
+  - significant architecture changes
+  - distribution/commercial/legal requirements
 
----
-
-## Rules for safe maintenance
-
-### Prefer editing these first
-
-- `core/` for pure logic
-- `infra/` for IO/integration
-- `ui/` for extracted UI modules
-
-### Avoid expanding these responsibilities
-
-- `clubal.py` should gradually become an orchestrator, not a dumping ground
-- `weather_service.py` should not be reopened without real regression evidence
-- stable agenda behavior should not be rewritten without a confirmed bug
-
-### Preserve at all times
-
-- offline-first execution
-- portable compatibility
-- Windows compatibility
-- TV-friendly operation
-- graceful degradation
-- low resource usage
+This keeps production moving and prevents docs becoming a maintenance tax.
 
 ---
 
-## Current modularization strategy
+## Operational principles
 
-The current controlled modularization direction is:
+CLUBAL prioritizes stability over novelty:
 
-1. keep behavior unchanged
-2. move pure helpers out of `clubal.py`
-3. move layout/math into dedicated UI modules
-4. keep feature boundaries clear
-5. only then reduce main-screen orchestration
-
-This repository should evolve toward:
-
-- thin entrypoint
-- clearer module contracts
-- safer maintenance
-- lower regression risk
+- Preserve offline-first behavior.
+- Prefer small, low-risk refactors.
+- Keep `clubal.py` as an orchestrator (avoid turning it into a monolith).
+- Keep shims (`weather_service.py`, `ui/header_weather.py`) to preserve import compatibility.
 
 ---
 
-## Practical guidance for future edits
+## Assets
 
-If the task is about...
-
-- **startup / wiring** → start in `clubal.py`
-- **header sizing/layout** → start in `ui/header_layout.py`
-- **date strings / PT-BR formatting** → start in `core/date_text.py` and `core/ptbr_text.py`
-- **schedule loading** → start in `infra/xlsx_loader.py`
-- **AGORA / PRÓXIMAS behavior** → start in `core/agenda.py` and `core/card_metrics.py`
-- **weather** → start in `weather_service.py`
-- **logs** → start in `infra/logging_manager.py`
-
----
-
-## Operational philosophy
-
-CLUBAL is not just an “agenda with weather”.
-
-It is a lightweight, resilient institutional communication runtime intended to support modular information delivery in constrained environments.
-
-Agenda, weather, and future content blocks should remain replaceable modules over a stable runtime base.
+- `graphics/` contains logos and UI images.
+- For TV/Windows packaging, ensure assets are bundled with the build.
 

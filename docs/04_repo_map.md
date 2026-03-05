@@ -1,45 +1,61 @@
 # 04_REPO_MAP — Structural Map of CLUBAL
 
-This document provides a fast structural understanding of the project.
+This document provides a fast structural understanding of the repository.
 
-It is not product documentation.
-It is an engineering navigation guide.
+- It is **not** product documentation.
+- It is an engineering **navigation guide**.
+
+---
+
+## Documentation policy (evergreen)
+
+Docs under `docs/` should be **stable and low-maintenance**.
+
+Update documentation only when there is a **real contract change**, such as:
+
+- module boundary / public API changes
+- significant architecture changes
+- distribution, commercial, or legal requirements
+
+Avoid updating docs for every roadmap step or minor refactor.
 
 ---
 
 ## 1. High-Level Architecture
 
-CLUBAL is structured in layered responsibility blocks:
+CLUBAL is structured in responsibility layers:
 
-- core → pure logic, no UI side-effects
-- infra → IO and integration helpers
-- ui → extracted layout and visual logic
-- app/bootstrap → runtime wiring and environment setup
-- root entrypoint → orchestration
+- `core/` → pure logic (no UI side-effects)
+- `infra/` → IO and integrations (logs, Excel loading)
+- `ui/` → Tkinter UI modules and extracted rendering helpers
+- `app/` → runtime orchestration helpers (refresh pipeline, tick scheduling)
+- `weather/` → canonical weather backend package (cache/net/icons/forecast/service)
+- root shims → compatibility re-exports to preserve imports (`weather_service.py`, `ui/header_weather.py`)
+- root entrypoint → `clubal.py` orchestrates wiring and the main screen
 
-The long-term goal is to keep `clubal.py` as a thin orchestrator.
+Long-term goal: keep `clubal.py` thin and delegate responsibilities to the folders above.
 
 ---
 
 ## 2. Directory Responsibilities
 
-### core/
+### `core/`
 
 Contains:
 - agenda filtering logic
 - date and PT-BR text formatting
 - card metrics
 - domain models
-- environment detection helpers
+- environment/bootstrap helpers (pure)
 
 Rules:
-- no Tkinter imports here
+- no Tkinter imports
 - no UI drawing
-- no direct file IO except clearly isolated helpers
+- no direct file IO (except clearly isolated helpers)
 
 ---
 
-### infra/
+### `infra/`
 
 Contains:
 - logging manager
@@ -53,34 +69,85 @@ Rules:
 
 ---
 
-### ui/
+### `ui/`
 
 Contains:
 - header layout logic
 - layout math
-- visual helpers
-- card rendering helpers (when extracted)
+- UI widgets/cards
+- extracted rendering helpers
 
 Rules:
 - can use Tkinter
 - must not contain business rules
 - must not perform Excel reading
-- must not embed schedule logic
+- must not embed schedule filtering logic
+
+Notes:
+- `ui/header_weather.py` is a **compatibility shim** that re-exports `WeatherCard`.
 
 ---
 
-### weather_service.py
+### `app/`
 
-Standalone weather backend.
+Contains:
+- refresh/update pipeline helpers
+- tick scheduling and housekeeping helpers
+- runtime state helpers
 
 Rules:
-- no UI drawing
-- no Tkinter widget construction
-- only returns structured data and cached results
+- may coordinate across `core/`, `infra/`, `ui/`, `weather/`
+- should not accumulate UI drawing/layout logic
+- should not absorb domain rules that belong to `core/`
 
 ---
 
-### clubal.py
+### `weather/`
+
+Canonical weather backend package.
+
+Contains:
+- cache IO
+- network helpers
+- official icon resolution
+- forecast parsing
+- service/facade API
+
+Rules:
+- no UI widget construction
+- no Tkinter drawing/layout
+- returns structured data and cached results
+
+Compatibility:
+- `weather_service.py` (repository root) is a **shim** that re-exports the canonical API from `weather/`.
+
+---
+
+### `graphics/`
+
+Contains:
+- logos
+- UI images
+- icon assets
+
+Rule:
+- packaging must include these assets for TV/Windows deployments.
+
+---
+
+### `docs/`
+
+Contains:
+- roadmap and engineering documentation
+
+Rule:
+- keep docs evergreen; update only when contracts/architecture/distribution require it.
+
+---
+
+## 3. Key Root Files
+
+### `clubal.py`
 
 Main runtime entrypoint.
 
@@ -95,23 +162,32 @@ Should gradually:
 - delegate layout math to `ui/`
 - delegate logic to `core/`
 - delegate IO to `infra/`
+- delegate runtime orchestration to `app/`
+
+### `weather_service.py`
+
+Compatibility shim (do not expand).
+
+Rules:
+- preserve import compatibility (`import weather_service as weather_mod`)
+- canonical implementation lives in `weather/`
 
 ---
 
-## 3. Spreadsheet Model
+## 4. Spreadsheet Model
 
 Repository version:
-- grade_template.xlsx
+- `grade_template.xlsx`
 
 Runtime version:
-- grade.xlsx (local only)
+- `grade.xlsx` (local only)
 
 Never commit:
-- grade.xlsx
+- `grade.xlsx`
 
 ---
 
-## 4. Safe Refactor Rules
+## 5. Safe Refactor Rules
 
 When refactoring:
 
@@ -119,25 +195,17 @@ When refactoring:
 2. Preserve behavior.
 3. Keep module boundaries clean.
 4. Never mix UI drawing and domain logic.
-5. Avoid re-opening stable modules without regression evidence.
+5. Avoid reopening stable modules without regression evidence.
 
 ---
 
-## 5. Current Modularization Stage
+## 6. When to update this document
 
-Phase 2 — Controlled Extraction
+Update this file only when one of these changes happens:
 
-Status:
-- core helpers partially extracted
-- header layout partially extracted
-- further separation required
+- new top-level folder/responsibility added/removed
+- a shim becomes canonical (or canonical becomes shim)
+- a public module contract changes
+- distribution/packaging constraints change
 
-Next direction:
-- reduce clubal.py surface
-- increase clarity of module contracts
-- avoid cross-import coupling
-
----
-
-This file must stay short, structural, and pragmatic.
-
+Otherwise, keep it short and structural.

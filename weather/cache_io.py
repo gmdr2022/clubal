@@ -23,6 +23,7 @@ __all__ = [
     "_icons_dir",
     "_archive_existing_cache",
     "_cleanup_cache_archive",
+    "_migrate_legacy_weather_storage",
     "housekeeping",
 ]
 
@@ -188,6 +189,109 @@ def _cleanup_cache_archive(archive_dir: str, logger=None) -> None:
         if logger:
             logger(f"[WEATHER] Cleanup archive error {type(e).__name__}: {e}")
 
+def _migrate_legacy_weather_storage(app_dir: str, logger=None) -> None:
+    """
+    Migra layout antigo (se existir) para o padrão definitivo:
+
+    Antigos (legado):
+      <CACHE_ROOT>/weather_cache.json
+      <CACHE_ROOT>/weather_icons/
+      <CACHE_ROOT>/cache_old/
+      <CACHE_ROOT>/weather/weather_cache.json  (se já existir, não mexe)
+
+    Novo (padrão):
+      <CACHE_ROOT>/weather/weather_cache.json
+      <CACHE_ROOT>/weather/weather_icons/
+      <CACHE_ROOT>/weather/cache_old/
+    """
+    try:
+        # Se não temos cache gravável, não migra nada
+        if _PATHS.cache_dir is None:
+            return
+
+        cache_root = str(_PATHS.cache_dir)  # <CACHE_ROOT>
+        new_root = _cache_root(app_dir)     # <CACHE_ROOT>/weather
+        if not new_root:
+            return
+
+        new_cache = os.path.join(new_root, "weather_cache.json")
+        new_icons = os.path.join(new_root, ICONS_DIRNAME)  # weather_icons
+        new_archive = os.path.join(new_root, CACHE_ARCHIVE_DIRNAME)  # cache_old
+
+        _safe_mkdir(new_icons)
+        _safe_mkdir(new_archive)
+
+        # 1) mover weather_cache.json solto para dentro de /weather/
+        old_cache = os.path.join(cache_root, "weather_cache.json")
+        if (not os.path.exists(new_cache)) and os.path.exists(old_cache):
+            try:
+                os.replace(old_cache, new_cache)
+                if logger:
+                    logger(f"[WEATHER] Migrated legacy cache -> {new_cache}")
+            except Exception as e:
+                if logger:
+                    logger(f"[WEATHER] Legacy cache migrate failed {type(e).__name__}: {e}")
+
+        # 2) mover weather_icons/ solto para dentro de /weather/weather_icons/
+        old_icons = os.path.join(cache_root, ICONS_DIRNAME)
+        if os.path.isdir(old_icons):
+            try:
+                for name in os.listdir(old_icons):
+                    src = os.path.join(old_icons, name)
+                    dst = os.path.join(new_icons, name)
+                    if not os.path.isfile(src):
+                        continue
+                    if os.path.exists(dst):
+                        continue
+                    try:
+                        os.replace(src, dst)
+                    except Exception:
+                        pass
+
+                # tenta remover pasta antiga se ficou vazia
+                try:
+                    if not os.listdir(old_icons):
+                        os.rmdir(old_icons)
+                except Exception:
+                    pass
+
+                if logger:
+                    logger(f"[WEATHER] Migrated legacy icons -> {new_icons}")
+            except Exception as e:
+                if logger:
+                    logger(f"[WEATHER] Legacy icons migrate failed {type(e).__name__}: {e}")
+
+        # 3) mover cache_old/ solto para dentro de /weather/cache_old/
+        old_archive = os.path.join(cache_root, CACHE_ARCHIVE_DIRNAME)
+        if os.path.isdir(old_archive):
+            try:
+                for name in os.listdir(old_archive):
+                    src = os.path.join(old_archive, name)
+                    dst = os.path.join(new_archive, name)
+                    if not os.path.isfile(src):
+                        continue
+                    if os.path.exists(dst):
+                        continue
+                    try:
+                        os.replace(src, dst)
+                    except Exception:
+                        pass
+
+                # tenta remover pasta antiga se ficou vazia
+                try:
+                    if not os.listdir(old_archive):
+                        os.rmdir(old_archive)
+                except Exception:
+                    pass
+
+                if logger:
+                    logger(f"[WEATHER] Migrated legacy archive -> {new_archive}")
+            except Exception as e:
+                if logger:
+                    logger(f"[WEATHER] Legacy archive migrate failed {type(e).__name__}: {e}")
+
+    except Exception:
+        pass
 
 def housekeeping(app_dir: str, logger=None) -> None:
     current, archive = _cache_paths(app_dir)

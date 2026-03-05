@@ -20,6 +20,14 @@ from ui.image_runtime import (
     pil_photo_image as _pil_photo_image,
 )
 
+from ui.weather_card_marquee import (
+    ensure_forecast_marquee_widgets,
+    ensure_top_marquee_widgets,
+    layout_top_status_right,
+    start_or_layout_forecast_marquee,
+    stop_forecast_marquee,
+    stop_top_marquee,
+)
 import weather_service as weather_mod
 
 
@@ -273,285 +281,26 @@ class WeatherCard(tk.Frame):
     # -------------------------
 
     def _stop_top_marquee(self) -> None:
-        try:
-            if self._tmarquee_after is not None:
-                self.after_cancel(self._tmarquee_after)
-        except Exception:
-            pass
-        self._tmarquee_after = None
-        self._tmarquee_running = False
+        stop_top_marquee(self)
 
     def _ensure_top_marquee_widgets(self, bg: str) -> None:
-        if self._tmarquee_frame is not None and self._tmarquee_label1 is not None and self._tmarquee_label2 is not None:
-            return
-
-        self._tmarquee_frame = tk.Frame(self.canvas, bg=bg, bd=0, highlightthickness=0)
-
-        self._tmarquee_label1 = tk.Label(
-            self._tmarquee_frame,
-            text="",
-            font=self._f_title_status,
-            fg="#bcd3ff",
-            bg=bg,
-            bd=0,
-            highlightthickness=0
-        )
-        self._tmarquee_label1.place(x=0, y=0)
-
-        self._tmarquee_label2 = tk.Label(
-            self._tmarquee_frame,
-            text="",
-            font=self._f_title_status,
-            fg="#bcd3ff",
-            bg=bg,
-            bd=0,
-            highlightthickness=0
-        )
-        self._tmarquee_label2.place(x=0, y=0)
+        ensure_top_marquee_widgets(self, bg=bg)
 
     def _layout_top_status_right(self, box: Tuple[int, int, int, int], text: str, bg: str) -> None:
-        """
-        box: (x1,y1,x2,y2) área do status (direita). Deve ser CLIP real.
-        - Se couber: mostra estático alinhado à direita.
-        - Se não couber: marquee contínuo rolando para a esquerda.
-        """
-        x1, y1, x2, y2 = box
-        w = max(10, int(x2 - x1))
-        h = max(10, int(y2 - y1))
-
-        self._ensure_top_marquee_widgets(bg=bg)
-
-        if self._tmarquee_frame is None or self._tmarquee_label1 is None or self._tmarquee_label2 is None:
-            return
-
-        top_label1 = self._tmarquee_label1
-        top_label2 = self._tmarquee_label2
-
-        try:
-            if self._tmarquee_win_id is None:
-                self._tmarquee_win_id = self.canvas.create_window(
-                    x1, y1, anchor="nw",
-                    window=self._tmarquee_frame,
-                    width=w,
-                    height=h
-                )
-            else:
-                self.canvas.coords(self._tmarquee_win_id, x1, y1)
-                self.canvas.itemconfig(self._tmarquee_win_id, width=w, height=h)
-        except Exception:
-            return
-
-        safe_text = (" ".join((text or "").split()) or "—").upper()
-
-        try:
-            top_label1.configure(text=safe_text, font=self._f_title_status, bg=bg)
-            top_label2.configure(text=safe_text, font=self._f_title_status, bg=bg)
-        except Exception:
-            return
-
-        try:
-            text_w = int(self._f_title_status.measure(safe_text))
-        except Exception:
-            text_w = len(safe_text) * 9
-
-        try:
-            line_h = int(self._f_title_status.metrics("linespace"))
-        except Exception:
-            line_h = 18
-
-        y_center = int(max(0, (h - line_h) // 2))
-        self._tmarquee_last_box = box
-
-        if text_w <= (w - 6):
-            self._stop_top_marquee()
-
-            x_right = int(max(0, w - text_w))
-            try:
-                top_label1.place_configure(x=x_right, y=y_center)
-                top_label2.place_configure(x=w + 2000, y=y_center)
-            except Exception:
-                pass
-            return
-
-        self._stop_top_marquee()
-        self._tmarquee_running = True
-
-        spacing = int(max(40, min(int(self._tmarquee_gap_px), max(40, w // 2))))
-
-        self._tmarquee_x1 = int(w + 2)
-        self._tmarquee_x2 = int(self._tmarquee_x1 + text_w + spacing)
-
-        try:
-            top_label1.place_configure(x=self._tmarquee_x1, y=y_center)
-            top_label2.place_configure(x=self._tmarquee_x2, y=y_center)
-        except Exception:
-            pass
-
-        def _tick():
-            if not self._tmarquee_running:
-                return
-            if self._tmarquee_last_box != box:
-                return
-
-            step = int(max(1, self._tmarquee_speed_px))
-            self._tmarquee_x1 -= step
-            self._tmarquee_x2 -= step
-
-            if (self._tmarquee_x1 + text_w) < -2:
-                self._tmarquee_x1 = int(self._tmarquee_x2 + text_w + spacing)
-            if (self._tmarquee_x2 + text_w) < -2:
-                self._tmarquee_x2 = int(self._tmarquee_x1 + text_w + spacing)
-
-            try:
-                top_label1.place_configure(x=self._tmarquee_x1)
-                top_label2.place_configure(x=self._tmarquee_x2)
-            except Exception:
-                pass
-
-            self._tmarquee_after = self.after(int(self._tmarquee_tick_ms), _tick)
-
-        self._tmarquee_after = self.after(int(self._tmarquee_tick_ms), _tick)
+        layout_top_status_right(self, box=box, text=text, bg=bg)
 
     # -------------------------
     # Forecast marquee (CLIP REAL)
     # -------------------------
 
     def _stop_marquee(self) -> None:
-        try:
-            if self._marquee_after is not None:
-                self.after_cancel(self._marquee_after)
-        except Exception:
-            pass
-        self._marquee_after = None
-        self._marquee_running = False
+        stop_forecast_marquee(self)
 
     def _ensure_forecast_marquee_widgets(self) -> None:
-        if self._forecast_frame is not None and self._forecast_label is not None and self._forecast_label2 is not None:
-            return
-
-        bg = getattr(self, "_forecast_strip_bg", self.glass_fill)
-        edge = getattr(self, "_forecast_strip_edge", self.glass_edge)
-
-        self._forecast_frame = tk.Frame(self.canvas, bg=bg, bd=0, highlightthickness=1, highlightbackground=edge)
-        self._forecast_label = tk.Label(
-            self._forecast_frame,
-            text="",
-            font=self._f_forecast,
-            fg="#ffffff",
-            bg=bg,
-            bd=0,
-            highlightthickness=0
-        )
-        self._forecast_label.place(x=0, y=0)
-
-        self._forecast_label2 = tk.Label(
-            self._forecast_frame,
-            text="",
-            font=self._f_forecast,
-            fg="#ffffff",
-            bg=bg,
-            bd=0,
-            highlightthickness=0
-        )
-        self._forecast_label2.place(x=0, y=0)
+        ensure_forecast_marquee_widgets(self)
 
     def _start_or_layout_marquee(self, box: Tuple[int, int, int, int], text: str) -> None:
-        x1, y1, x2, y2 = box
-        w = max(10, int(x2 - x1))
-        h = max(10, int(y2 - y1))
-
-        self._ensure_forecast_marquee_widgets()
-
-        if self._forecast_frame is None or self._forecast_label is None or self._forecast_label2 is None:
-            return
-
-        forecast_label1 = self._forecast_label
-        forecast_label2 = self._forecast_label2
-
-        try:
-            if self._forecast_win_id is None:
-                self._forecast_win_id = self.canvas.create_window(
-                    x1, y1, anchor="nw",
-                    window=self._forecast_frame,
-                    width=w,
-                    height=h
-                )
-            else:
-                self.canvas.coords(self._forecast_win_id, x1, y1)
-                self.canvas.itemconfig(self._forecast_win_id, width=w, height=h)
-        except Exception:
-            return
-
-        safe_text = " ".join((text or "").split()) or "—"
-
-        try:
-            forecast_label1.configure(text=safe_text, font=self._f_forecast)
-            forecast_label2.configure(text=safe_text, font=self._f_forecast)
-        except Exception:
-            return
-
-        try:
-            text_w = int(self._f_forecast.measure(safe_text))
-        except Exception:
-            text_w = len(safe_text) * 10
-
-        try:
-            line_h = int(self._f_forecast.metrics("linespace"))
-        except Exception:
-            line_h = 26
-
-        y_center = int(max(0, (h - line_h) // 2))
-        self._marquee_last_box = box
-
-        if text_w <= (w - 10):
-            self._stop_marquee()
-            x_center = int(max(0, (w - text_w) // 2))
-            try:
-                forecast_label1.place_configure(x=x_center, y=y_center)
-                forecast_label2.place_configure(x=w + 2000, y=y_center)
-            except Exception:
-                pass
-            return
-
-        self._stop_marquee()
-        self._marquee_running = True
-
-        spacing = int(max(40, min(int(self._marquee_gap_px), max(40, w // 2))))
-
-        self._marquee_x = int(w + 2)
-        self._marquee_x2 = int(self._marquee_x + text_w + spacing)
-
-        try:
-            forecast_label1.place_configure(x=self._marquee_x, y=y_center)
-            forecast_label2.place_configure(x=self._marquee_x2, y=y_center)
-        except Exception:
-            pass
-
-        def _tick():
-            if not self._marquee_running:
-                return
-            if self._marquee_last_box != box:
-                return
-
-            step = int(max(1, self._marquee_speed_px))
-
-            self._marquee_x -= step
-            self._marquee_x2 -= step
-
-            if (self._marquee_x + text_w) < -2:
-                self._marquee_x = int(self._marquee_x2 + text_w + spacing)
-            if (self._marquee_x2 + text_w) < -2:
-                self._marquee_x2 = int(self._marquee_x + text_w + spacing)
-
-            try:
-                forecast_label1.place_configure(x=self._marquee_x)
-                forecast_label2.place_configure(x=self._marquee_x2)
-            except Exception:
-                pass
-
-            self._marquee_after = self.after(int(self._marquee_tick_ms), _tick)
-
-        self._marquee_after = self.after(int(self._marquee_tick_ms), _tick)
+        start_or_layout_forecast_marquee(self, box=box, text=text)
 
     # -------------------------
     # Icon async

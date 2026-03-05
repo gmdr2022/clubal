@@ -142,9 +142,6 @@ def layout_top_status_right(card, box: Tuple[int, int, int, int], text: str, bg:
             top_label2.place_configure(x=card._tmarquee_x2)
         except Exception:
             pass
-
-        card._tmarquee_after = card.after(int(card._tmarquee_tick_ms), _tick)
-
     card._tmarquee_after = card.after(int(card._tmarquee_tick_ms), _tick)
 
 
@@ -188,7 +185,6 @@ def ensure_forecast_marquee_widgets(card) -> None:
     )
     card._forecast_label2.place(x=0, y=0)
 
-
 def start_or_layout_forecast_marquee(card, box: Tuple[int, int, int, int], text: str) -> None:
     x1, y1, x2, y2 = box
     w = max(10, int(x2 - x1))
@@ -213,6 +209,9 @@ def start_or_layout_forecast_marquee(card, box: Tuple[int, int, int, int], text:
         else:
             card.canvas.coords(card._forecast_win_id, x1, y1)
             card.canvas.itemconfig(card._forecast_win_id, width=w, height=h)
+
+        # garante que o texto fique por cima de qualquer draw posterior
+        card.canvas.tag_raise(card._forecast_win_id)
     except Exception:
         return
 
@@ -252,7 +251,8 @@ def start_or_layout_forecast_marquee(card, box: Tuple[int, int, int, int], text:
 
     spacing = int(max(40, min(int(card._marquee_gap_px), max(40, w // 2))))
 
-    card._marquee_x = int(w + 2)
+    # começa visível (evita “faixa vazia” quando o texto é longo)
+    card._marquee_x = 2
     card._marquee_x2 = int(card._marquee_x + text_w + spacing)
 
     try:
@@ -286,7 +286,6 @@ def start_or_layout_forecast_marquee(card, box: Tuple[int, int, int, int], text:
         card._marquee_after = card.after(int(card._marquee_tick_ms), _tick)
 
     card._marquee_after = card.after(int(card._marquee_tick_ms), _tick)
-
 
 __all__ = [
     "ensure_forecast_marquee_widgets",

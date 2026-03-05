@@ -39,15 +39,17 @@ def draw_background(card, w: int, h: int) -> None:
     bg_name = "weather_day" if card.is_day_theme else "weather_night"
     p = _img_path_try(bg_name)
 
-    try:
-        card._log(f"[WEATHER][BG] PIL_OK={PIL_OK} bg_name={bg_name} path={p} exists={bool(p and os.path.exists(p))}")
-    except Exception:
-        pass
-
     key = (p, w, h, "PIL" if PIL_OK else "TK")
     if key != card._bg_key:
         card._bg_key = key
         card._bg_img = None
+
+        try:
+            card._log(
+                f"[WEATHER][BG] PIL_OK={PIL_OK} bg_name={bg_name} path={p} exists={bool(p and os.path.exists(p))}"
+            )
+        except Exception:
+            pass
 
         if p and os.path.exists(p):
             if PIL_OK:
@@ -84,13 +86,11 @@ def draw_background(card, w: int, h: int) -> None:
                     except Exception:
                         pass
 
+    # sempre desenha (o canvas é redesenhado no ciclo do card)
     if card._bg_img:
         card.canvas.create_image(0, 0, anchor="nw", image=card._bg_img)
     else:
         card.canvas.create_rectangle(0, 0, w, h, fill=card.base_bg, outline="")
-
-    if card._bg_img:
-        card.canvas.create_image(0, 0, anchor="nw", image=card._bg_img)
 
 
 def draw_frame(card, w: int, h: int) -> None:

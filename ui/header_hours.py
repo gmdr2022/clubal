@@ -85,6 +85,24 @@ class HoursCard(tk.Frame):
         # -------------------------
         # Modos + horários (fonte da verdade)
         # -------------------------
+        # -------------------------
+        # Mode header accents (make rotation obvious)
+        # -------------------------
+        if self.is_day_theme:
+            self._mode_accents = {
+                # ACADEMIA: teal (fitness/energy, but NOT the same as "OPEN green")
+                "ACADEMIA": {"top_bg": "#0F5C6E", "top_fg": "#FFFFFF", "aux_bg": "#DCEFF3"},
+                # SECRETARIA: indigo (admin/office)
+                "SECRETARIA": {"top_bg": "#3D3A7A", "top_fg": "#FFFFFF", "aux_bg": "#E8E6FF"},
+                # CLUBE: blue (pool/water vibe)
+                "CLUBE": {"top_bg": "#1D4F9A", "top_fg": "#FFFFFF", "aux_bg": "#E2ECFF"},
+            }
+        else:
+            self._mode_accents = {
+                "ACADEMIA": {"top_bg": "#0B3E4A", "top_fg": "#FFFFFF", "aux_bg": "#102B31"},
+                "SECRETARIA": {"top_bg": "#262154", "top_fg": "#FFFFFF", "aux_bg": "#1D1938"},
+                "CLUBE": {"top_bg": "#123A78", "top_fg": "#FFFFFF", "aux_bg": "#10233E"},
+            }
         self.modes = [
             {
                 "title": "ACADEMIA",
@@ -390,7 +408,24 @@ class HoursCard(tk.Frame):
 
     def update_view(self, force: bool = False):
         mode = self.modes[self._mode]
-        self.title_lbl.configure(text=mode["title"])
+        title = mode["title"]
+
+        acc = getattr(self, "_mode_accents", {}).get(title)
+        if acc:
+            top_bg = acc["top_bg"]
+            top_fg = acc["top_fg"]
+            aux_bg = acc["aux_bg"]
+        else:
+            top_bg = getattr(self, "topbar_bg", self.border)
+            top_fg = getattr(self, "topbar_fg", "#ffffff")
+            aux_bg = self.panel2
+
+        # Top bar changes by mode (rotation becomes visually obvious)
+        try:
+            self.top.configure(bg=top_bg)
+            self.title_lbl.configure(text=title, bg=top_bg, fg=top_fg)
+        except Exception:
+            self.title_lbl.configure(text=title)
 
         rows = mode["rows"]
 
@@ -418,22 +453,23 @@ class HoursCard(tk.Frame):
         def _apply_status_palette(kind: str) -> None:
             if kind == "open":
                 bg1 = self.status_open_bg1
-                bg2 = self.status_open_bg2
                 fg = self.status_open_fg
             else:
                 bg1 = self.status_closed_bg1
-                bg2 = self.status_closed_bg2
                 fg = self.status_closed_fg
 
             try:
+                # Big panel keeps semantic tint (open/closed)
                 self.box1.configure(bg=bg1)
-                self.box2.configure(bg=bg2)
+
+                # Small panel becomes "aux neutral" based on the mode header
+                self.box2.configure(bg=aux_bg)
             except Exception:
                 pass
 
             try:
                 self.status_big.configure(bg=bg1, fg=fg)
-                self.status_small.configure(bg=bg2, fg=fg)
+                self.status_small.configure(bg=aux_bg, fg=fg)
             except Exception:
                 pass
 

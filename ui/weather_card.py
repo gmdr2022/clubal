@@ -706,7 +706,24 @@ class WeatherCard(tk.Frame):
         panel_y2 = mid_y2
 
         icon_box = int(min((panel_y2 - panel_y1), usable_w * 0.42))
-        icon_box = max(92, min(icon_box, 190))
+        icon_box = int(min(max(72, icon_box), 190))
+
+        # Reserve minimum height for the forecast strip on small screens.
+        # Without this, the strip can become too short (and text gets clipped).
+        try:
+            forecast_line_h = int(self._f_forecast.metrics("linespace"))
+        except Exception:
+            forecast_line_h = 22
+
+        min_forecast_panel_h = int(max(44, forecast_line_h + 18))
+        panel_h = int(panel_y2 - panel_y1)
+
+        # bottom_h = panel_h - icon_box - gap_bottom (gap_bottom is 8 below)
+        max_icon_box = int(panel_h - 8 - min_forecast_panel_h)
+        if max_icon_box < 72:
+            max_icon_box = 72
+
+        icon_box = int(min(icon_box, max_icon_box))
 
         icon_x1 = pad + 10
         icon_x2 = icon_x1 + icon_box
@@ -779,7 +796,7 @@ class WeatherCard(tk.Frame):
         self._glass_panel(bottom_x1, bottom_y1, bottom_x2, bottom_y2)
 
         text_pad_x = 12
-        text_pad_y = 8
+        text_pad_y = int(max(2, min(8, (bottom_y2 - bottom_y1) * 0.12)))
         mx1 = int(bottom_x1 + text_pad_x)
         mx2 = int(bottom_x2 - text_pad_x)
         my1 = int(bottom_y1 + text_pad_y)

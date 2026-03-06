@@ -210,7 +210,10 @@ def start_or_layout_forecast_marquee(card, box: Tuple[int, int, int, int], text:
             card.canvas.coords(card._forecast_win_id, x1, y1)
             card.canvas.itemconfig(card._forecast_win_id, width=w, height=h)
 
-        # garante que o texto fique por cima de qualquer draw posterior
+        # garante que o widget ocupe o tamanho do box (evita clipping em telas menores)
+        card._forecast_frame.configure(width=w, height=h)
+
+        # garante que o forecast fique por cima de draws posteriores
         card.canvas.tag_raise(card._forecast_win_id)
     except Exception:
         return
@@ -218,8 +221,8 @@ def start_or_layout_forecast_marquee(card, box: Tuple[int, int, int, int], text:
     safe_text = " ".join((text or "").split()) or "—"
 
     try:
-        forecast_label1.configure(text=safe_text, font=card._f_forecast)
-        forecast_label2.configure(text=safe_text, font=card._f_forecast)
+        forecast_label1.configure(text=safe_text, font=card._f_forecast, padx=0, pady=0)
+        forecast_label2.configure(text=safe_text, font=card._f_forecast, padx=0, pady=0)
     except Exception:
         return
 
@@ -228,12 +231,25 @@ def start_or_layout_forecast_marquee(card, box: Tuple[int, int, int, int], text:
     except Exception:
         text_w = len(safe_text) * 10
 
+    # altura REAL do label (mais confiável que linespace em telas menores)
+    try:
+        card._forecast_frame.update_idletasks()
+        req_h = int(max(1, forecast_label1.winfo_reqheight()))
+    except Exception:
+        req_h = 0
+
     try:
         line_h = int(card._f_forecast.metrics("linespace"))
     except Exception:
         line_h = 26
 
-    y_center = int(max(0, (h - line_h) // 2))
+    if req_h <= 0:
+        req_h = line_h
+    else:
+        req_h = max(req_h, line_h)
+
+    y_center = int(max(0, (h - req_h) // 2))
+
     card._marquee_last_box = box
 
     if text_w <= (w - 10):
@@ -251,7 +267,7 @@ def start_or_layout_forecast_marquee(card, box: Tuple[int, int, int, int], text:
 
     spacing = int(max(40, min(int(card._marquee_gap_px), max(40, w // 2))))
 
-    # começa visível (evita “faixa vazia” quando o texto é longo)
+    # começa visível (evita faixa vazia)
     card._marquee_x = 2
     card._marquee_x2 = int(card._marquee_x + text_w + spacing)
 

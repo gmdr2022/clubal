@@ -98,6 +98,9 @@ class WeatherCard(tk.Frame):
         self._f_temp = tkfont.Font(family="Segoe UI", size=34, weight="bold")
         self._f_tag = tkfont.Font(family="Segoe UI", size=11, weight="bold")
         self._f_forecast = tkfont.Font(family="Segoe UI", size=18, weight="bold")
+        self._forecast_font_base_size = int(self._f_forecast.cget("size"))
+        self._forecast_font_size_last = self._forecast_font_base_size
+        self._forecast_font_fit_last_key = None
 
         # Estado (textos)
         self._city_text = "ALFENAS"
@@ -801,15 +804,32 @@ class WeatherCard(tk.Frame):
         text_pad_y = int(max(2, min(8, bottom_h * 0.12)))
 
         # Ensure forecast font fits vertically inside the strip on small screens.
+        # This must be bidirectional: shrink on small screens and restore on larger screens.
         try:
             avail_h = int(max(12, bottom_h - (2 * text_pad_y)))
-            fs = int(self._f_forecast.cget("size"))
-            while fs > 10:
-                self._f_forecast.configure(size=fs)
-                lh = int(self._f_forecast.metrics("linespace"))
-                if lh <= avail_h:
-                    break
-                fs -= 1
+
+            base = int(getattr(self, "_forecast_font_base_size", int(self._f_forecast.cget("size"))))
+            last_key = getattr(self, "_forecast_font_fit_last_key", None)
+
+            if last_key != avail_h:
+                target = base
+
+                for s in range(base, 9, -1):
+                    self._f_forecast.configure(size=s)
+                    lh = int(self._f_forecast.metrics("linespace"))
+                    if lh <= avail_h:
+                        target = s
+                        break
+
+                if target < 10:
+                    target = 10
+
+                self._forecast_font_fit_last_key = avail_h
+                self._forecast_font_size_last = target
+
+            target = int(getattr(self, "_forecast_font_size_last", base))
+            if int(self._f_forecast.cget("size")) != int(target):
+                self._f_forecast.configure(size=int(target))
         except Exception:
             pass
         mx1 = int(bottom_x1 + text_pad_x)

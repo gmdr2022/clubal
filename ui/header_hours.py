@@ -30,7 +30,7 @@ class HoursCard(tk.Frame):
         self.pack_propagate(False)
         self.grid_propagate(False)
 
-        # -------------------------
+         # -------------------------
         # Paleta (dia/noite) — independente do WeatherCard
         # -------------------------
         if self.is_day_theme:
@@ -43,8 +43,20 @@ class HoursCard(tk.Frame):
             self.vline_col = "#cfd8e5"
             self.table_fg = "#0b2d4d"
             self.table_fg_soft = "#0b2d4d"
-            self.green = "#2f7d32"
             self.guide_col = "#d6deea"
+
+            # Top bar (neutral, cohesive with the global UI)
+            self.topbar_bg = "#0b2d4d"
+            self.topbar_fg = "#ffffff"
+
+            # Status semantic colors (soft)
+            self.status_open_bg1 = "#dff3ea"
+            self.status_open_bg2 = "#d2eee2"
+            self.status_open_fg = "#1f7a4a"
+
+            self.status_closed_bg1 = "#f4e1e1"
+            self.status_closed_bg2 = "#f0d7d7"
+            self.status_closed_fg = "#b23b3b"
         else:
             self.card_bg = "#0b223c"
             self.border = "#132744"
@@ -55,8 +67,20 @@ class HoursCard(tk.Frame):
             self.vline_col = "#2c3f56"
             self.table_fg = "#ffffff"
             self.table_fg_soft = "#ffffff"
-            self.green = "#2f7d32"
             self.guide_col = "#20324d"
+
+            # Top bar (neutral)
+            self.topbar_bg = "#132744"
+            self.topbar_fg = "#ffffff"
+
+            # Status semantic colors (soft, night-safe)
+            self.status_open_bg1 = "#173a2b"
+            self.status_open_bg2 = "#123024"
+            self.status_open_fg = "#bfffe1"
+
+            self.status_closed_bg1 = "#3b1f24"
+            self.status_closed_bg2 = "#311a1f"
+            self.status_closed_fg = "#ffd1d1"
 
         # -------------------------
         # Modos + horários (fonte da verdade)
@@ -141,7 +165,7 @@ class HoursCard(tk.Frame):
         # -------------------------
         # Top bar
         # -------------------------
-        self.top = tk.Frame(self.inner, bg=self.green, height=34)
+        self.top = tk.Frame(self.inner, bg=self.topbar_bg, height=34)
         self.top.pack(fill="x")
         self.top.pack_propagate(False)
 
@@ -149,8 +173,8 @@ class HoursCard(tk.Frame):
             self.top,
             text="",
             font=("Segoe UI", 14, "bold"),
-            fg="white",
-            bg=self.green,
+            fg=self.topbar_fg,
+            bg=self.topbar_bg,
             anchor="center",
         )
         self.title_lbl.pack(fill="both", expand=True)
@@ -391,6 +415,28 @@ class HoursCard(tk.Frame):
                 guide.grid_remove()
                 row_frame.pack_forget()
 
+        def _apply_status_palette(kind: str) -> None:
+            if kind == "open":
+                bg1 = self.status_open_bg1
+                bg2 = self.status_open_bg2
+                fg = self.status_open_fg
+            else:
+                bg1 = self.status_closed_bg1
+                bg2 = self.status_closed_bg2
+                fg = self.status_closed_fg
+
+            try:
+                self.box1.configure(bg=bg1)
+                self.box2.configure(bg=bg2)
+            except Exception:
+                pass
+
+            try:
+                self.status_big.configure(bg=bg1, fg=fg)
+                self.status_small.configure(bg=bg2, fg=fg)
+            except Exception:
+                pass
+
         schedule = mode.get("schedule", {})
         now = time.localtime()
         now_m = now.tm_hour * 60 + now.tm_min
@@ -400,6 +446,7 @@ class HoursCard(tk.Frame):
         if not interval:
             self.status_big.configure(text="FECHADO HOJE")
             self.status_small.configure(text="SEM ATENDIMENTO")
+            _apply_status_palette("closed")
             return
 
         open_m, close_m = interval
@@ -410,12 +457,15 @@ class HoursCard(tk.Frame):
         if open_m <= now_m < close_m:
             self.status_big.configure(text="ABERTO AGORA")
             self.status_small.configure(text=f"ATÉ {fmt(close_m)}")
+            _apply_status_palette("open")
         elif now_m < open_m:
             self.status_big.configure(text="FECHADO AGORA")
             self.status_small.configure(text=f"ABRE ÀS {fmt(open_m)}")
+            _apply_status_palette("closed")
         else:
             self.status_big.configure(text="FECHADO AGORA")
             self.status_small.configure(text=self._next_opening_text(schedule))
+            _apply_status_palette("closed")
 
     def _place_inner(self, _evt=None):
         w = self.canvas.winfo_width()

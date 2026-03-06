@@ -795,8 +795,23 @@ class WeatherCard(tk.Frame):
         bottom_x2 = text_x2
         self._glass_panel(bottom_x1, bottom_y1, bottom_x2, bottom_y2)
 
+        bottom_h = int(bottom_y2 - bottom_y1)
+
         text_pad_x = 12
-        text_pad_y = int(max(2, min(8, (bottom_y2 - bottom_y1) * 0.12)))
+        text_pad_y = int(max(2, min(8, bottom_h * 0.12)))
+
+        # Ensure forecast font fits vertically inside the strip on small screens.
+        try:
+            avail_h = int(max(12, bottom_h - (2 * text_pad_y)))
+            fs = int(self._f_forecast.cget("size"))
+            while fs > 10:
+                self._f_forecast.configure(size=fs)
+                lh = int(self._f_forecast.metrics("linespace"))
+                if lh <= avail_h:
+                    break
+                fs -= 1
+        except Exception:
+            pass
         mx1 = int(bottom_x1 + text_pad_x)
         mx2 = int(bottom_x2 - text_pad_x)
         my1 = int(bottom_y1 + text_pad_y)

@@ -14,7 +14,6 @@ build/
 dist/
 
 # Local runtime links / generated runtime data
-_runtime_link/
 _internal/_runtime_link/
 
 # Portable user content

@@ -11,6 +11,16 @@ LOG_ARCHIVE_KEEP = 6
 LOG_ARCHIVE_MAX_AGE_DAYS = 30
 
 _log_lock = threading.Lock()
+_LOG_WRITES_DISABLED = False
+
+
+def _log_writes_enabled() -> bool:
+    return not _LOG_WRITES_DISABLED
+
+
+def _disable_log_writes() -> None:
+    global _LOG_WRITES_DISABLED
+    _LOG_WRITES_DISABLED = True
 
 
 def _safe_unlink(path: Optional[str]) -> None:
@@ -25,15 +35,23 @@ def _safe_unlink(path: Optional[str]) -> None:
 def _ensure_dir(path: Optional[str]) -> bool:
     if not path:
         return False
+
+    if not _log_writes_enabled():
+        return False
+
     try:
         os.makedirs(path, exist_ok=True)
         return True
     except Exception:
+        _disable_log_writes()
         return False
 
 
 def _cleanup_log_archive(log_archive_dir: Optional[str]) -> None:
     try:
+        if not _log_writes_enabled():
+            return
+
         if not log_archive_dir or not os.path.isdir(log_archive_dir):
             return
 
@@ -66,6 +84,9 @@ def _cleanup_log_archive(log_archive_dir: Optional[str]) -> None:
 
 def rotate_logs_if_needed(log_path: Optional[str], log_archive_dir: Optional[str], logger=None) -> None:
     try:
+        if not _log_writes_enabled():
+            return
+
         if not log_path or not log_archive_dir:
             return
 
@@ -83,34 +104,44 @@ def rotate_logs_if_needed(log_path: Optional[str], log_archive_dir: Optional[str
 
         ts = time.strftime("%Y%m%d_%H%M%S")
         archived = os.path.join(log_archive_dir, f"clubal_{ts}.log")
+
         try:
             os.replace(log_path, archived)
         except Exception:
-            with open(log_path, "rb") as src, open(archived, "wb") as dst:
-                dst.write(src.read())
-            with open(log_path, "w", encoding="utf-8"):
-                pass
-
-        if logger:
-            logger(f"[LOG] Rotated clubal.log -> {archived}")
+            try:
+                with open(log_path, "rb") as src, open(archived, "wb") as dst:
+                    dst.write(src.read())
+                with open(log_path, "w", encoding="utf-8"):
+                    pass
+            except Exception:
+                _disable_log_writes()
+                return
 
         _cleanup_log_archive(log_archive_dir)
 
-    except Exception as e:
-        if logger:
-            logger(f"[LOG] Rotate error {type(e).__name__}: {e}")
+    except Exception:
+        _disable_log_writes()
 
 
 def write_log(log_path: Optional[str], logs_dir: Optional[str], msg: str) -> None:
     try:
+        if not _log_writes_enabled():
+            return
+
         if not log_path:
             return
 
         with _log_lock:
-            if logs_dir:
-                os.makedirs(logs_dir, exist_ok=True)
+            if logs_dir and not _ensure_dir(logs_dir):
+                return
+
             ts = time.strftime("%Y-%m-%d %H:%M:%S")
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(f"[{ts}] {msg}\n")
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(f"[{ts}] {msg}\n")
+            except Exception:
+                _disable_log_writes()
+                return
+
     except Exception:
-        pass
+        _disable_log_writes()

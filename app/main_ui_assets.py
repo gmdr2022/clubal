@@ -14,17 +14,50 @@ from ui.image_runtime import (
 )
 
 
-def pil_contain_to_size(path: str, w: int, h: int):
+def pil_contain_to_size(
+    path: str,
+    w: int,
+    h: int,
+    *,
+    fill_ratio: float = 0.94,
+    trim_transparent: bool = True,
+):
     """
     Resize tipo 'CONTAIN' (encaixa sem cortar), centralizado, mantendo transparência.
+    Melhorias:
+    - recorta borda transparente externa quando existir
+    - permite ocupar mais área útil do slot via fill_ratio
     Retorna PhotoImage (PIL).
     """
     im = _pil_open_rgba(path)
+
+    if trim_transparent:
+        try:
+            alpha = im.getchannel("A")
+            bbox = alpha.getbbox()
+            if bbox:
+                im = im.crop(bbox)
+        except Exception:
+            pass
+
     iw, ih = im.size
     if iw <= 0 or ih <= 0:
         return None
 
-    scale = min(w / iw, h / ih)
+    try:
+        fr = float(fill_ratio)
+    except Exception:
+        fr = 0.94
+
+    if fr < 0.60:
+        fr = 0.60
+    if fr > 1.00:
+        fr = 1.00
+
+    fit_w = max(1, int(w * fr))
+    fit_h = max(1, int(h * fr))
+
+    scale = min(fit_w / iw, fit_h / ih)
     nw = max(1, int(iw * scale))
     nh = max(1, int(ih * scale))
     im = im.resize((nw, nh), PIL_LANCZOS)
@@ -74,7 +107,13 @@ def refresh_logo(
 
         if PIL_OK:
             try:
-                img = pil_contain_to_size(p, target_w, target_h)
+                img = pil_contain_to_size(
+                    p,
+                    target_w,
+                    target_h,
+                    fill_ratio=0.96,
+                    trim_transparent=True,
+                )
             except Exception:
                 img = None
 
@@ -99,42 +138,48 @@ def refresh_client_logo(
     app: Any,
     *,
     external_client_logo_dir: str,
-    fallback_client_dir: str,
+    fallback_logo_path: str,
     first_image_in_dir: Callable[[str], Optional[str]],
 ) -> None:
     """
     Logo do CLIENTE (dinâmico):
     1) tenta a primeira imagem dentro de logo_cliente/
-    2) se não houver, usa fallback interno em graphics/logos/client/
+    2) se não houver, usa a logo completa interna do CLUBAL
     """
     try:
         p = first_image_in_dir(external_client_logo_dir)
 
-        if not p:
-            p = first_image_in_dir(fallback_client_dir)
+        if not p and fallback_logo_path and os.path.exists(fallback_logo_path):
+            p = fallback_logo_path
 
         if not p:
             if hasattr(app, "client_logo_lbl"):
                 app.client_logo_lbl.configure(image="")
             return
 
-        target_w = 320
-        target_h = 150
+        target_w = 360
+        target_h = 160
 
         if hasattr(app, "client_slot") and app.client_slot.winfo_exists():
             app.client_slot.update_idletasks()
             sw = app.client_slot.winfo_width()
             sh = app.client_slot.winfo_height()
             if sw and sw > 10:
-                target_w = max(160, sw - 10)
+                target_w = max(220, sw - 4)
             if sh and sh > 10:
-                target_h = max(90, sh - 10)
+                target_h = max(110, sh - 4)
 
         img = None
 
         if PIL_OK:
             try:
-                img = pil_contain_to_size(p, target_w, target_h)
+                img = pil_contain_to_size(
+                    p,
+                    target_w,
+                    target_h,
+                    fill_ratio=0.985,
+                    trim_transparent=True,
+                )
             except Exception:
                 img = None
 

@@ -359,7 +359,7 @@ class ClubalApp(tk.Tk):
         refresh_client_logo(
             self,
             external_client_logo_dir=EXTERNAL_CLIENT_LOGO_DIR,
-            fallback_client_dir=GRAPHICS_CLIENT_DIR,
+            fallback_logo_path=os.path.join(GRAPHICS_BRAND_DIR, CLIENT_LOGO_FALLBACK),
             first_image_in_dir=_first_image_in_dir,
         )
 

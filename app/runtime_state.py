@@ -38,7 +38,7 @@ def build_runtime_state(ctx: Any) -> RuntimeState:
 
     clubal_icon_file = "CLUBAL_ICO.png"
     client_logo_dirname = "logo_cliente"
-    client_logo_fallback = "logo_sesi_default.png"
+    client_logo_fallback = "CLUBAL_LOGO.png"
 
     external_client_logo_dir = os.path.join(str(ctx.paths.data_dir), client_logo_dirname)
 

@@ -11,6 +11,10 @@ from core.models import ClassItem
 DEFAULT_SHEET_NAME = "CLUBAL"
 EXPECTED_HEADERS = ["DIA", "INICIO", "FIM", "MODALIDADE", "PROFESSOR", "TAG"]
 
+XLSX_STATE_OK = "ok"
+XLSX_STATE_MISSING = "missing"
+XLSX_STATE_ERROR = "error"
+
 
 def _normalize_header(v: object) -> str:
     return str(v or "").strip().upper()
@@ -81,22 +85,31 @@ def reload_classes_if_needed(
     force: bool = False,
     sheet_name: str = DEFAULT_SHEET_NAME,
     logger: Optional[Callable[[str], None]] = None,
-) -> Tuple[List[ClassItem], Optional[float], bool]:
+) -> Tuple[List[ClassItem], Optional[float], bool, str]:
+    path = str(path or "").strip()
+
+    if not path or not os.path.isfile(path):
+        if logger:
+            logger(f"[XLSX] Arquivo ausente: {path}")
+
+        changed = bool(current_items) or (previous_mtime is not None)
+        return [], None, changed, XLSX_STATE_MISSING
+
     try:
         mtime = os.path.getmtime(path)
 
         if not force and previous_mtime is not None and mtime == previous_mtime:
-            return current_items, previous_mtime, False
+            return current_items, previous_mtime, False, XLSX_STATE_OK
 
         items = load_classes_from_excel(path, sheet_name=sheet_name)
 
         if logger:
             logger(f"[XLSX] Excel carregado: {len(items)} itens. mtime={mtime}")
 
-        return items, mtime, True
+        return items, mtime, True, XLSX_STATE_OK
 
     except Exception as e:
         if logger:
             logger(f"[XLSX] Falha ao carregar Excel: {type(e).__name__}: {e}")
 
-        return current_items, previous_mtime, False
+        return current_items, previous_mtime, False, XLSX_STATE_ERROR

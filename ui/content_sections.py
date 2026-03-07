@@ -120,6 +120,7 @@ class SectionFrame(tk.Frame):
         )
         self.empty_lbl.place(relx=0.5, rely=0.5, anchor="center")
         self.empty_lbl.lift()
+        self._empty_override_text = ""
 
         self._max_cards_visible = 6
         self._padx = 10
@@ -187,6 +188,20 @@ class SectionFrame(tk.Frame):
         self._ensure_card_count(self._max_cards_visible)
 
         self.scroll_canvas.bind("<Configure>", self._on_viewport_resize)
+
+    def set_empty_override(self, text: str | None) -> None:
+        self._empty_override_text = str(text or "").strip()
+
+    def clear_empty_override(self) -> None:
+        self._empty_override_text = ""
+
+    def _default_empty_text(self) -> str:
+        if self.kind == "PRÓXIMAS":
+            return "SEM PRÓXIMAS ATIVIDADES"
+        return "SEM ATIVIDADES AGORA"
+
+    def _resolve_empty_text(self) -> str:
+        return self._empty_override_text or self._default_empty_text()
 
     def _place_inner(self, _evt=None):
         w = self.panel.winfo_width()
@@ -357,10 +372,7 @@ class SectionFrame(tk.Frame):
 
         if total <= 0:
             self._stop_scroll()
-            if self.kind == "PRÓXIMAS":
-                self.empty_lbl.configure(text="SEM PRÓXIMAS ATIVIDADES")
-            else:
-                self.empty_lbl.configure(text="SEM ATIVIDADES AGORA")
+            self.empty_lbl.configure(text=self._resolve_empty_text())
             self.empty_lbl.place(relx=0.5, rely=0.5, anchor="center")
             self.empty_lbl.lift()
 

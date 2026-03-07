@@ -10,13 +10,61 @@ from core.agenda import compute_now_next as agenda_compute_now_next
 from core.card_metrics import minutes_until, remaining_progress, upcoming_progress
 from core.models import ClassItem
 from core.time_utils import split_clock_hhmm_ss
-from infra.xlsx_loader import reload_classes_if_needed
+from infra.xlsx_loader import (
+    XLSX_STATE_ERROR,
+    XLSX_STATE_MISSING,
+    XLSX_STATE_OK,
+    reload_classes_if_needed,
+)
 
 WEATHER_CITY_LABEL = "Alfenas"
 WEATHER_LAT = -21.4267
 WEATHER_LON = -45.9470
 WEATHER_MIN_REFRESH_SEC = 600
 WEATHER_USER_AGENT = "CLUBAL-AgendaLive/2.0 (contact: local)"
+
+EXCEL_MISSING_MSG_AGORA = "PLANILHA LOCAL AUSENTE\nCOLOQUE grade.xlsx AO LADO DO APP"
+EXCEL_MISSING_MSG_PROX = "USE grade_template.xlsx\nCOMO MODELO"
+EXCEL_ERROR_MSG_AGORA = "ERRO AO LER grade.xlsx"
+EXCEL_ERROR_MSG_PROX = "REVISE A ABA CLUBAL\nE OS CABEÇALHOS"
+
+
+def _set_section_empty_override(section: Any, text: str | None) -> None:
+    if section is None:
+        return
+
+    try:
+        fn = getattr(section, "set_empty_override", None)
+        if callable(fn):
+            fn(text)
+    except Exception:
+        pass
+
+
+def _clear_agenda_empty_overrides(app: Any) -> None:
+    _set_section_empty_override(getattr(app, "agora", None), None)
+    _set_section_empty_override(getattr(app, "prox", None), None)
+
+
+def _apply_excel_ui_state(app: Any) -> bool:
+    state = str(getattr(app, "_excel_load_state", XLSX_STATE_OK) or XLSX_STATE_OK).strip().lower()
+
+    if state == XLSX_STATE_MISSING:
+        _set_section_empty_override(getattr(app, "agora", None), EXCEL_MISSING_MSG_AGORA)
+        _set_section_empty_override(getattr(app, "prox", None), EXCEL_MISSING_MSG_PROX)
+        app.agora.update_cards([])
+        app.prox.update_cards([])
+        return True
+
+    if state == XLSX_STATE_ERROR:
+        _set_section_empty_override(getattr(app, "agora", None), EXCEL_ERROR_MSG_AGORA)
+        _set_section_empty_override(getattr(app, "prox", None), EXCEL_ERROR_MSG_PROX)
+        app.agora.update_cards([])
+        app.prox.update_cards([])
+        return True
+
+    _clear_agenda_empty_overrides(app)
+    return False
 
 
 def reload_excel_if_needed(
@@ -26,15 +74,14 @@ def reload_excel_if_needed(
     *,
     force: bool = False,
     logger=None,
-) -> Tuple[List[ClassItem], Optional[float]]:
-    all_items, last_excel_mtime, _changed = reload_classes_if_needed(
+) -> Tuple[List[ClassItem], Optional[float], bool, str]:
+    return reload_classes_if_needed(
         excel_path,
         all_items,
         last_excel_mtime,
         force=force,
         logger=logger,
     )
-    return all_items, last_excel_mtime
 
 
 def reload_excel_state_if_needed(
@@ -44,13 +91,20 @@ def reload_excel_state_if_needed(
     force: bool = False,
     logger=None,
 ) -> None:
-    app.all_items, app.last_excel_mtime = reload_excel_if_needed(
+    prev_state = str(getattr(app, "_excel_load_state", XLSX_STATE_OK) or XLSX_STATE_OK).strip().lower()
+
+    app.all_items, app.last_excel_mtime, changed, state = reload_excel_if_needed(
         excel_path,
         app.all_items,
         app.last_excel_mtime,
         force=force,
         logger=logger,
     )
+
+    app._excel_load_state = state
+
+    if changed or state != prev_state:
+        app._last_agenda_run_ts = 0.0
 
 
 def compute_now_next_cards(
@@ -231,6 +285,9 @@ def refresh_agenda_if_due(
         return
 
     app._last_agenda_run_ts = time.time()
+
+    if _apply_excel_ui_state(app):
+        return
 
     now_dt = datetime.now()
     now_cards, next_cards, _window_end, _discard_day, _discard_time, _discard_other = compute_now_next_cards(

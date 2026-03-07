@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -143,11 +144,36 @@ def _ensure_runtime_link_best_effort(app_dir: Path, writable_root: Path | None) 
         return
 
 
+def _resolve_assets_dir(app_dir: Path) -> Path:
+    """
+    Resolve a pasta de assets com fallback para bundle PyInstaller.
+
+    Prioridade:
+    1) graphics/ ao lado do app/executável
+    2) graphics/ dentro de sys._MEIPASS (one-file)
+    3) fallback conservador: app_dir/graphics
+    """
+    external_assets_dir = app_dir / "graphics"
+    if external_assets_dir.is_dir():
+        return external_assets_dir
+
+    try:
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            bundled_assets_dir = Path(str(meipass)).resolve() / "graphics"
+            if bundled_assets_dir.is_dir():
+                return bundled_assets_dir
+    except Exception:
+        pass
+
+    return external_assets_dir
+
+
 def build_paths(env: Environment) -> Paths:
     app_dir = env.app_dir
 
     # Onde ficam assets fixos (imagens etc.)
-    assets_dir = app_dir / "graphics"
+    assets_dir = _resolve_assets_dir(app_dir)
 
     # Onde ficam dados do app (grade.xlsx etc.)
     data_dir = app_dir

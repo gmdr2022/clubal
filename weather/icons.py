@@ -6,6 +6,7 @@ import time
 from typing import Optional
 
 from weather.cache_io import (
+    _disable_cache_writes,
     _icons_dir,
     _migrate_legacy_weather_storage,
     _read_json,
@@ -97,8 +98,14 @@ def get_official_icon_png_path(
                 logger(f"[WEATHER] Icon fetch code={code_base} url={url}")
 
             data = _http_get_bytes(url, user_agent=user_agent, timeout=6, logger=logger)
+        except Exception as e:
+            if logger:
+                logger(f"[WEATHER] Icon download failed code={code_base} err={type(e).__name__}: {e}")
+            continue
 
-            tmp = local_path + ".tmp"
+        tmp = local_path + ".tmp"
+
+        try:
             with open(tmp, "wb") as f:
                 f.write(data)
             os.replace(tmp, local_path)
@@ -108,17 +115,20 @@ def get_official_icon_png_path(
             return local_path
 
         except Exception as e:
-            if logger:
-                logger(f"[WEATHER] Icon download failed code={code_base} err={type(e).__name__}: {e}")
-
             try:
-                tmp = local_path + ".tmp"
                 if os.path.exists(tmp):
                     os.remove(tmp)
             except Exception:
                 pass
 
-            continue
+            _disable_cache_writes(
+                logger=logger,
+                reason=f"icon write failed code={code_base} path={local_path}",
+            )
+
+            if logger:
+                logger(f"[WEATHER] Icon cache write failed code={code_base} err={type(e).__name__}: {e}")
+            return None
 
     return None
 
@@ -242,20 +252,32 @@ def start_icon_pack_update_async(
                 url = _icon_url_for_code(code)
                 try:
                     data = _http_get_bytes(url, user_agent=user_agent, timeout=6, logger=logger)
-                    tmp = p + ".tmp"
+                except Exception:
+                    continue
+
+                tmp = p + ".tmp"
+                try:
                     with open(tmp, "wb") as f:
                         f.write(data)
                     os.replace(tmp, p)
                     downloaded += 1
                     if logger:
                         logger(f"[WEATHER] Prewarm cached -> {p}")
-                except Exception:
+                except Exception as e:
                     try:
-                        tmp = p + ".tmp"
                         if os.path.exists(tmp):
                             os.remove(tmp)
                     except Exception:
                         pass
+
+                    _disable_cache_writes(
+                        logger=logger,
+                        reason=f"prewarm write failed code={code} path={p}",
+                    )
+
+                    if logger:
+                        logger(f"[WEATHER] Prewarm cache write failed code={code} err={type(e).__name__}: {e}")
+                    return
 
             try:
                 _write_json_atomic(

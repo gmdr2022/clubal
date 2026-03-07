@@ -24,11 +24,14 @@ __all__ = [
     "_archive_existing_cache",
     "_cleanup_cache_archive",
     "_migrate_legacy_weather_storage",
+    "_cache_writes_enabled",
+    "_disable_cache_writes",
     "housekeeping",
 ]
 
 _ENV = detect_environment()
 _PATHS = build_paths(_ENV)
+_CACHE_WRITES_DISABLED = False
 
 
 # ============================================================
@@ -47,6 +50,25 @@ ICON_STALE_DAYS = 60                    # (opcional) rebaixar se quiser (não ob
 # cache_io helpers
 # ============================================================
 
+def _cache_writes_enabled() -> bool:
+    return not _CACHE_WRITES_DISABLED
+
+
+def _disable_cache_writes(logger=None, reason: str = "") -> None:
+    global _CACHE_WRITES_DISABLED
+
+    if _CACHE_WRITES_DISABLED:
+        return
+
+    _CACHE_WRITES_DISABLED = True
+
+    if logger:
+        msg = "[WEATHER] Cache writes disabled for this session"
+        if reason:
+            msg = f"{msg}: {reason}"
+        logger(msg)
+
+
 def _safe_int(x: Any) -> Optional[int]:
     try:
         return int(round(float(x)))
@@ -54,11 +76,12 @@ def _safe_int(x: Any) -> Optional[int]:
         return None
 
 
-def _safe_mkdir(path: str) -> None:
+def _safe_mkdir(path: str) -> bool:
     try:
         os.makedirs(path, exist_ok=True)
+        return True
     except Exception:
-        pass
+        return False
 
 
 def _read_json(path: str) -> Optional[Dict[str, Any]]:
@@ -69,13 +92,31 @@ def _read_json(path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _write_json_atomic(path: str, data: Dict[str, Any]) -> None:
+def _write_json_atomic(path: str, data: Dict[str, Any]) -> bool:
+    if not _cache_writes_enabled():
+        return False
+
     d = os.path.dirname(path)
-    _safe_mkdir(d)
+    if d and not _safe_mkdir(d):
+        _disable_cache_writes(reason=f"mkdir failed: {d}")
+        return False
+
     tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
+
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
+
+        _disable_cache_writes(reason=f"json write failed: {path}")
+        return False
 
 
 def _cache_root(app_dir: str) -> Optional[str]:
@@ -89,6 +130,9 @@ def _cache_root(app_dir: str) -> Optional[str]:
     """
     _ = app_dir  # compat
 
+    if not _cache_writes_enabled():
+        return None
+
     p = cache_subdir(_PATHS, "weather")
     if p is None:
         return None
@@ -101,13 +145,20 @@ def _cache_paths(app_dir: str) -> Tuple[Optional[str], Optional[str]]:
       - current cache JSON: <CACHE_ROOT>/weather/weather_cache.json
       - archive dir:        <CACHE_ROOT>/weather/cache_old/
     """
+    if not _cache_writes_enabled():
+        return None, None
+
     root = _cache_root(app_dir)
     if not root:
         return None, None
 
     current = os.path.join(root, "weather_cache.json")
     archive = os.path.join(root, CACHE_ARCHIVE_DIRNAME)  # "cache_old"
-    _safe_mkdir(archive)
+
+    if not _safe_mkdir(archive):
+        _disable_cache_writes(reason=f"mkdir failed: {archive}")
+        return None, None
+
     return current, archive
 
 
@@ -116,17 +167,26 @@ def _icons_dir(app_dir: str) -> Optional[str]:
     Ícones oficiais (PNG) cacheados em:
       <CACHE_ROOT>/weather/weather_icons/
     """
+    if not _cache_writes_enabled():
+        return None
+
     root = _cache_root(app_dir)
     if not root:
         return None
 
     p = os.path.join(root, ICONS_DIRNAME)  # "weather_icons"
-    _safe_mkdir(p)
+    if not _safe_mkdir(p):
+        _disable_cache_writes(reason=f"mkdir failed: {p}")
+        return None
+
     return p
 
 
 def _archive_existing_cache(current_path: str, archive_dir: str, logger=None) -> None:
     try:
+        if not _cache_writes_enabled():
+            return
+
         if not os.path.exists(current_path):
             return
 
@@ -146,6 +206,7 @@ def _archive_existing_cache(current_path: str, archive_dir: str, logger=None) ->
             logger(f"[WEATHER] Archived old cache -> {dst}")
 
     except Exception as e:
+        _disable_cache_writes(logger=logger, reason=f"archive failed: {current_path}")
         if logger:
             logger(f"[WEATHER] Archive cache error {type(e).__name__}: {e}")
 
@@ -189,6 +250,7 @@ def _cleanup_cache_archive(archive_dir: str, logger=None) -> None:
         if logger:
             logger(f"[WEATHER] Cleanup archive error {type(e).__name__}: {e}")
 
+
 def _migrate_legacy_weather_storage(app_dir: str, logger=None) -> None:
     """
     Migra layout antigo (se existir) para o padrão definitivo:
@@ -205,6 +267,9 @@ def _migrate_legacy_weather_storage(app_dir: str, logger=None) -> None:
       <CACHE_ROOT>/weather/cache_old/
     """
     try:
+        if not _cache_writes_enabled():
+            return
+
         # Se não temos cache gravável, não migra nada
         if _PATHS.cache_dir is None:
             return
@@ -292,6 +357,7 @@ def _migrate_legacy_weather_storage(app_dir: str, logger=None) -> None:
 
     except Exception:
         pass
+
 
 def housekeeping(app_dir: str, logger=None) -> None:
     current, archive = _cache_paths(app_dir)

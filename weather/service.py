@@ -58,22 +58,31 @@ def get_weather(
             cache_archive_dir = archive_dir
 
             if cache_path is not None and cache_archive_dir is not None:
-                _archive_existing_cache(cache_path, cache_archive_dir, logger=logger)
-                _write_json_atomic(
-                    cache_path,
-                    {
-                        "ts": res.cache_ts,
-                        "payload": payload,
-                        "city": (WEATHER_PLACE_CITY or city_label),
-                        "uf": (WEATHER_PLACE_UF or ""),
-                        "lat": use_lat,
-                        "lon": use_lon,
-                    },
-                )
-                _cleanup_cache_archive(cache_archive_dir, logger=logger)
+                wrote_cache = False
+
+                try:
+                    _archive_existing_cache(cache_path, cache_archive_dir, logger=logger)
+                    wrote_cache = _write_json_atomic(
+                        cache_path,
+                        {
+                            "ts": res.cache_ts,
+                            "payload": payload,
+                            "city": (WEATHER_PLACE_CITY or city_label),
+                            "uf": (WEATHER_PLACE_UF or ""),
+                            "lat": use_lat,
+                            "lon": use_lon,
+                        },
+                    )
+                    _cleanup_cache_archive(cache_archive_dir, logger=logger)
+                except Exception as e:
+                    if logger:
+                        logger(f"[WEATHER] Cache persist skipped {type(e).__name__}: {e}")
 
                 if logger:
-                    logger(f"[WEATHER] ONLINE ok temp={res.temp_c} sym={res.symbol_code} cache_path={cache_path}")
+                    if wrote_cache:
+                        logger(f"[WEATHER] ONLINE ok temp={res.temp_c} sym={res.symbol_code} cache_path={cache_path}")
+                    else:
+                        logger(f"[WEATHER] ONLINE ok temp={res.temp_c} sym={res.symbol_code} (cache write skipped)")
             else:
                 if logger:
                     logger(f"[WEATHER] ONLINE ok temp={res.temp_c} sym={res.symbol_code} (cache disabled)")

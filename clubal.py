@@ -155,6 +155,10 @@ class ClubalApp(tk.Tk):
         self._last_agenda_run_ts = 0.0               # throttle agenda
         self._last_weather_ui_key = None             # evita redraw desnecessário do clima
 
+        self._fullscreen_guard_enabled = True
+        self._fullscreen_guard_after = None
+        self._last_fullscreen_repair_ts = 0.0
+
         # Debug via variável de ambiente:
         # - CLUBAL_DEBUG_LAYOUT=1 (marca áreas na UI)
         # - CLUBAL_DEBUG_AGENDA=1  (logs detalhados da agenda)
@@ -248,6 +252,8 @@ class ClubalApp(tk.Tk):
         self._build_ui()
 
         self.bind("<Configure>", self._on_root_configure)
+        self.bind("<FocusIn>", self._on_focus_in)
+        self.bind("<Map>", self._on_window_map)
 
         reload_excel_state_if_needed(
             self,
@@ -255,6 +261,7 @@ class ClubalApp(tk.Tk):
             force=True,
             logger=log,
         )
+        self._schedule_fullscreen_guard(delay_ms=250)
         self._tick()
 
         # ✅ antes: 9000 (9s). Agora mais confortável:
@@ -581,8 +588,92 @@ class ClubalApp(tk.Tk):
                 return
             self._last_layout_sig = sig
             self._layout_update()
+            self._schedule_fullscreen_guard(delay_ms=180)
         except Exception:
             pass
+
+    def _schedule_fullscreen_guard(self, delay_ms: int = 150) -> None:
+        if not getattr(self, "_fullscreen_guard_enabled", True):
+            return
+
+        if self._fullscreen_guard_after is not None:
+            return
+
+        try:
+            delay = max(50, int(delay_ms))
+        except Exception:
+            delay = 150
+
+        try:
+            self._fullscreen_guard_after = self.after(delay, self._run_fullscreen_guard)
+        except Exception:
+            self._fullscreen_guard_after = None
+
+    def _run_fullscreen_guard(self) -> None:
+        self._fullscreen_guard_after = None
+        self._ensure_fullscreen()
+
+    def _ensure_fullscreen(self, *, force: bool = False) -> None:
+        if not getattr(self, "_fullscreen_guard_enabled", True):
+            return
+
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
+
+        try:
+            is_fullscreen = bool(self.attributes("-fullscreen"))
+        except Exception:
+            is_fullscreen = False
+
+        try:
+            win_state = str(self.state() or "").strip().lower()
+        except Exception:
+            win_state = ""
+
+        needs_repair = (not is_fullscreen) or (win_state in ("iconic", "withdrawn"))
+        if not needs_repair:
+            return
+
+        now_ts = time.time()
+        if (not force) and ((now_ts - float(self._last_fullscreen_repair_ts or 0.0)) < 1.5):
+            return
+
+        try:
+            if win_state in ("iconic", "withdrawn"):
+                self.deiconify()
+        except Exception:
+            pass
+
+        try:
+            self.attributes("-fullscreen", True)
+        except Exception:
+            pass
+
+        try:
+            self.lift()
+        except Exception:
+            pass
+
+        try:
+            self.focus_force()
+        except Exception:
+            pass
+
+        self._last_fullscreen_repair_ts = now_ts
+
+        try:
+            log(f"[TVMODE] Fullscreen repaired state={win_state or 'normal'}")
+        except Exception:
+            pass
+
+    def _on_focus_in(self, _evt=None):
+        self._ensure_fullscreen(force=True)
+
+    def _on_window_map(self, _evt=None):
+        self._schedule_fullscreen_guard(delay_ms=120)
 
     # -------------------------
     # Hours rotate
@@ -599,6 +690,7 @@ class ClubalApp(tk.Tk):
     # -------------------------
     def _tick(self):
         try:
+            self._ensure_fullscreen()
             new_theme = theme_is_day()
             _, t, _ = date_time_strings()
 

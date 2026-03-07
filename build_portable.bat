@@ -105,10 +105,6 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if exist "graphics\logos\client\logo_sesi_default.png" (
-    copy /Y "graphics\logos\client\logo_sesi_default.png" "dist\CLUBAL\logo_cliente\logo_sesi_default.png" >nul
-)
-
 echo [3/4] Verificando artefatos...
 if not exist "dist\CLUBAL\CLUBAL.exe" (
     echo.

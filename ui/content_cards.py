@@ -16,6 +16,11 @@ class ClassCard(tk.Frame):
       e "TERMINA/COMEÇA EM XX MIN."
     - Pill de TAG à direita
     - Barra de progresso embaixo (sem depender do texto).
+
+    O título usa política adaptativa:
+    - tenta mostrar modalidade + professor
+    - se faltar espaço, prioriza só a modalidade
+    - se ainda faltar, aplica elipse na modalidade
     """
 
     def __init__(
@@ -81,6 +86,7 @@ class ClassCard(tk.Frame):
             fg=self.theme["card_fg"],
             font=self.f_title,
             anchor="w",
+            justify="left",
         )
         self.lbl_title.grid(
             row=0,
@@ -151,6 +157,13 @@ class ClassCard(tk.Frame):
         )
         self.progress_fill.place(x=0, y=0, relheight=1, width=0)
 
+        # ========= Estado adaptativo do header =========
+        self._title_primary = ""
+        self._title_professor = ""
+        self._title_mode = ""
+        self._layout_after = None
+        self._last_layout_signature = None
+
         # ========= Rotação (alternância) =========
         self._rot_after = None
         self._rot_state = 0
@@ -166,6 +179,13 @@ class ClassCard(tk.Frame):
         self._pulse_active = False
         self._pulse_color_a = None
         self._pulse_color_b = None
+
+        # ========= Estado da barra =========
+        self._progress_value = 0.0
+        self._progress_kind = self.card_kind or "AGORA"
+
+        self.bind("<Configure>", self._on_layout_changed)
+        self.inner.bind("<Configure>", self._on_layout_changed)
 
         self.refresh(self.data)
 
@@ -272,7 +292,7 @@ class ClassCard(tk.Frame):
 
         return s
 
-    def _build_title(self, d: dict) -> str:
+    def _extract_title_parts(self, d: dict) -> tuple[str, str]:
         modalidade = self._safe_str(d.get("modalidade"))
         professor = self._safe_str(d.get("professor"))
 
@@ -281,10 +301,215 @@ class ClassCard(tk.Frame):
         if not modalidade:
             modalidade = self._safe_str(d.get("local"))
 
-        if professor:
-            return f"{modalidade} • Prof. {professor}" if modalidade else f"Prof. {professor}"
+        return (modalidade or "—", professor)
 
-        return modalidade or "—"
+    def _measure_text_px(self, text: str, font: tkfont.Font) -> int:
+        try:
+            return int(font.measure((text or "").strip()))
+        except Exception:
+            txt = (text or "").strip()
+            try:
+                font_size = abs(int(font.cget("size")))
+            except Exception:
+                font_size = 12
+            return int(len(txt) * max(6, font_size))
+
+    def _ellipsize_to_px(self, text: str, max_px: int, font: tkfont.Font) -> str:
+        txt = (text or "").strip()
+        if not txt:
+            return ""
+
+        try:
+            limit = int(max_px)
+        except Exception:
+            limit = 0
+
+        if limit <= 0:
+            return ""
+
+        if self._measure_text_px(txt, font) <= limit:
+            return txt
+
+        ellipsis = "…"
+        if self._measure_text_px(ellipsis, font) > limit:
+            return ""
+
+        lo = 0
+        hi = len(txt)
+        best = ellipsis
+
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            head = txt[:mid].rstrip()
+            candidate = f"{head}{ellipsis}" if head else ellipsis
+            if self._measure_text_px(candidate, font) <= limit:
+                best = candidate
+                lo = mid + 1
+            else:
+                hi = mid - 1
+
+        return best
+
+    def _title_variants(self) -> list[tuple[str, str]]:
+        primary = (self._title_primary or "").strip()
+        professor = (self._title_professor or "").strip()
+
+        variants: list[tuple[str, str]] = []
+
+        if primary and primary != "—" and professor:
+            variants.append(("full", f"{primary} • Prof. {professor}"))
+            variants.append(("primary_only", primary))
+        elif primary and primary != "—":
+            variants.append(("primary_only", primary))
+        elif professor:
+            variants.append(("professor_only", f"Prof. {professor}"))
+        else:
+            variants.append(("empty", "—"))
+
+        return variants
+
+    def _current_card_width_px(self) -> int:
+        widths = []
+
+        for raw in (
+            self.winfo_width(),
+            self.inner.winfo_width(),
+            self._card_w,
+        ):
+            try:
+                v = int(raw)
+            except Exception:
+                v = 0
+            if v > 0:
+                widths.append(v)
+
+        try:
+            cfg_w = int(self.cget("width"))
+        except Exception:
+            cfg_w = 0
+        if cfg_w > 0:
+            widths.append(cfg_w)
+
+        return max(widths) if widths else 0
+
+    def _compute_title_slot_px(self) -> int:
+        card_w = self._current_card_width_px()
+
+        time_text = self._safe_str(self.lbl_time.cget("text"))
+
+        # Importante:
+        # não usar a largura atual renderizada do widget como referência principal,
+        # porque ela pode "segurar" a largura maior do estado anterior da rotação.
+        # Aqui a reserva deve seguir o conteúdo ATIVO do momento.
+        time_text_w = self._measure_text_px(time_text, self.f_mid)
+
+        # Piso visual para o bloco central não ficar apertado demais.
+        time_slot_w = max(110, time_text_w + 8)
+
+        # Para a pill, manter uma reserva estável é desejável.
+        pill_w = max(
+            int(self.pill.winfo_reqwidth() or 0),
+            self._measure_text_px(self._safe_str(self.pill.cget("text")), self.f_pill) + 28,
+            96,
+        )
+
+        reserved = (
+            self.pad_x
+            + 12
+            + time_slot_w
+            + 18
+            + 10
+            + pill_w
+            + self.pad_x
+            + 8
+        )
+
+        return max(48, int(card_w - reserved))
+
+    def _select_title_text(self, max_px: int) -> tuple[str, str]:
+        variants = self._title_variants()
+
+        for mode, text in variants:
+            if self._measure_text_px(text, self.f_title) <= max_px:
+                return mode, text
+
+        primary = (self._title_primary or "").strip()
+        professor = (self._title_professor or "").strip()
+
+        if primary and primary != "—":
+            ell = self._ellipsize_to_px(primary, max_px, self.f_title)
+            if ell:
+                return "primary_ellipsis", ell
+
+        if professor and (not primary or primary == "—"):
+            prof_text = f"Prof. {professor}"
+            ell = self._ellipsize_to_px(prof_text, max_px, self.f_title)
+            if ell:
+                return "professor_ellipsis", ell
+
+        dash = self._ellipsize_to_px("—", max_px, self.f_title)
+        return "empty", (dash or "")
+
+    def _apply_title_layout(self) -> None:
+        try:
+            slot_px = self._compute_title_slot_px()
+            mode, text = self._select_title_text(slot_px)
+            signature = (
+                slot_px,
+                self._safe_str(self.lbl_time.cget("text")),
+                self._safe_str(self.pill.cget("text")),
+                mode,
+                text,
+            )
+            if signature == self._last_layout_signature:
+                return
+
+            self._title_mode = mode
+            self.lbl_title.configure(text=text)
+            self._last_layout_signature = signature
+        except Exception:
+            try:
+                fallback = self._title_variants()[0][1]
+            except Exception:
+                fallback = "—"
+            self.lbl_title.configure(text=fallback)
+            self._title_mode = "fallback"
+            self._last_layout_signature = None
+
+    def _cancel_layout_refresh(self) -> None:
+        try:
+            if self._layout_after is not None:
+                self.after_cancel(self._layout_after)
+        except Exception:
+            pass
+        self._layout_after = None
+
+    def _flush_layout_refresh(self) -> None:
+        self._layout_after = None
+        self._apply_title_layout()
+
+    def _schedule_layout_refresh(self) -> None:
+        if self._layout_after is not None:
+            return
+
+        try:
+            self._layout_after = self.after_idle(self._flush_layout_refresh)
+        except Exception:
+            self._flush_layout_refresh()
+
+    def _on_layout_changed(self, _evt=None) -> None:
+        try:
+            w = int(self.winfo_width() or 0)
+            h = int(self.winfo_height() or 0)
+            if w > 1:
+                self._card_w = w
+            if h > 1:
+                self._card_h = h
+        except Exception:
+            pass
+
+        self._refresh_progress_width()
+        self._schedule_layout_refresh()
 
     def _pill_colors_for_tag(self, tag: str) -> tuple[str, str]:
         t = (tag or "").upper().strip()
@@ -311,6 +536,8 @@ class ClassCard(tk.Frame):
             self.lbl_time.configure(text=(s or "").strip())
         except Exception:
             pass
+
+        self._schedule_layout_refresh()
 
     def _stop_rotation(self) -> None:
         try:
@@ -342,17 +569,35 @@ class ClassCard(tk.Frame):
         self._stop_rotation()
         self._rot_after = self.after(int(self._rot_ms), self._tick_rotation)
 
+    def _refresh_progress_width(self) -> None:
+        try:
+            p = float(self._progress_value)
+        except Exception:
+            p = 0.0
+
+        if p < 0.0:
+            p = 0.0
+        if p > 1.0:
+            p = 1.0
+
+        w = max(1, int(self.progress_wrap.winfo_width() or 0))
+        if w <= 1:
+            w = max(1, int(self._current_card_width_px()) - (self.pad_x * 2))
+
+        fill_w = int(w * p)
+        self.progress_fill.place_configure(width=fill_w)
+
     # -----------------------------
     # API pública
     # -----------------------------
     def refresh(self, data: dict) -> None:
         self.data = data or {}
+        self._last_layout_signature = None
 
         if self.card_kind != "AGORA":
             self._stop_pulse()
 
-        title = self._build_title(self.data)
-        self.lbl_title.configure(text=title)
+        self._title_primary, self._title_professor = self._extract_title_parts(self.data)
 
         ini = self._fmt_hhmm(self.data.get("inicio"))
         fim = self._fmt_hhmm(self.data.get("fim"))
@@ -429,6 +674,9 @@ class ClassCard(tk.Frame):
 
             self._set_progress(p_upcoming, kind="PROXIMA")
 
+        self._apply_title_layout()
+        self._schedule_layout_refresh()
+
     def _set_progress(self, progress: float, kind: str) -> None:
         try:
             p = float(progress)
@@ -440,7 +688,10 @@ class ClassCard(tk.Frame):
         if p > 1.0:
             p = 1.0
 
-        if kind == "PROXIMA":
+        self._progress_value = p
+        self._progress_kind = (kind or self.card_kind or "AGORA").upper().strip()
+
+        if self._progress_kind == "PROXIMA":
             self._stop_pulse()
             self.progress_fill.configure(
                 bg=self.theme.get("progress_fill_upcoming", "#2B79D6")
@@ -474,12 +725,7 @@ class ClassCard(tk.Frame):
             if not self._pulse_active:
                 self.progress_fill.configure(bg=fill_col)
 
-        w = max(1, int(self.progress_wrap.winfo_width()))
-        if w <= 1:
-            w = max(1, int(self._card_w) - (self.pad_x * 2))
-
-        fill_w = int(w * p)
-        self.progress_fill.place_configure(width=fill_w)
+        self._refresh_progress_width()
 
     def dispose(self) -> None:
         try:
@@ -489,5 +735,10 @@ class ClassCard(tk.Frame):
 
         try:
             self._stop_pulse()
+        except Exception:
+            pass
+
+        try:
+            self._cancel_layout_refresh()
         except Exception:
             pass

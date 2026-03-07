@@ -6,17 +6,12 @@ from PyInstaller.utils.hooks import collect_submodules
 
 
 PROJECT_ROOT = Path(SPECPATH).resolve()
-APP_NAME = "CLUBAL"
 
 datas = []
 
 graphics_dir = PROJECT_ROOT / "graphics"
 if graphics_dir.exists() and graphics_dir.is_dir():
     datas.append((str(graphics_dir), "graphics"))
-
-grade_template = PROJECT_ROOT / "grade_template.xlsx"
-if grade_template.exists() and grade_template.is_file():
-    datas.append((str(grade_template), "."))
 
 hiddenimports = [
     "truststore",
@@ -46,7 +41,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name=APP_NAME,
+    name="CLUBAL",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -67,5 +62,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name=APP_NAME,
+    name="CLUBAL",
 )

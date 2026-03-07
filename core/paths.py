@@ -18,6 +18,7 @@ RUNTIME_LINK_NAME = "_runtime_link"
 # Legado antigo: __pycache__/_CLUBAL_DATA
 LEGACY_RUNTIME_LINK_PARENT = "__pycache__"
 LEGACY_RUNTIME_LINK_NAME = "_CLUBAL_DATA"
+INTERNAL_DIR_NAME = "_internal"
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,22 @@ def _remove_junction_best_effort(link_path: Path) -> None:
     except Exception:
         return
 
+def _runtime_link_path(app_dir: Path) -> Path | None:
+    """
+    Alias local preferencial:
+      <app_dir>/_internal/_runtime_link
+
+    Regra:
+    - só cria se _internal já existir
+    - não cria _internal no projeto fonte
+    """
+    try:
+        internal_dir = app_dir / INTERNAL_DIR_NAME
+        if not internal_dir.exists() or not internal_dir.is_dir():
+            return None
+        return internal_dir / RUNTIME_LINK_NAME
+    except Exception:
+        return None
 
 def _cleanup_legacy_runtime_link_best_effort(app_dir: Path) -> None:
     """
@@ -137,7 +154,9 @@ def _ensure_runtime_link_best_effort(app_dir: Path, writable_root: Path | None) 
         if writable_root is None:
             return
 
-        link_path = app_dir / RUNTIME_LINK_NAME
+        link_path = _runtime_link_path(app_dir)
+        if link_path is None:
+            return
         _create_junction_best_effort(link_path, writable_root)
         _cleanup_legacy_runtime_link_best_effort(app_dir)
     except Exception:

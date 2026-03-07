@@ -109,6 +109,7 @@ GRAPHICS_DIR = runtime.graphics_dir
 GRAPHICS_LOGOS_DIR = runtime.graphics_logos_dir
 GRAPHICS_BRAND_DIR = runtime.graphics_brand_dir
 GRAPHICS_CLIENT_DIR = runtime.graphics_client_dir
+EXTERNAL_CLIENT_LOGO_DIR = runtime.external_client_logo_dir
 
 CLUBAL_ICON_FILE = runtime.clubal_icon_file
 CLIENT_LOGO_DIRNAME = runtime.client_logo_dirname
@@ -357,7 +358,8 @@ class ClubalApp(tk.Tk):
     def _refresh_client_logo(self):
         refresh_client_logo(
             self,
-            graphics_client_dir=GRAPHICS_CLIENT_DIR,
+            external_client_logo_dir=EXTERNAL_CLIENT_LOGO_DIR,
+            fallback_client_dir=GRAPHICS_CLIENT_DIR,
             first_image_in_dir=_first_image_in_dir,
         )
 

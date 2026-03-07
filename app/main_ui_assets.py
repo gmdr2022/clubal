@@ -98,15 +98,20 @@ def refresh_logo(
 def refresh_client_logo(
     app: Any,
     *,
-    graphics_client_dir: str,
+    external_client_logo_dir: str,
+    fallback_client_dir: str,
     first_image_in_dir: Callable[[str], Optional[str]],
 ) -> None:
     """
     Logo do CLIENTE (dinâmico):
-    Usa a PRIMEIRA imagem (por nome) dentro de graphics/logos/client/
+    1) tenta a primeira imagem dentro de logo_cliente/
+    2) se não houver, usa fallback interno em graphics/logos/client/
     """
     try:
-        p = first_image_in_dir(graphics_client_dir)
+        p = first_image_in_dir(external_client_logo_dir)
+
+        if not p:
+            p = first_image_in_dir(fallback_client_dir)
 
         if not p:
             if hasattr(app, "client_logo_lbl"):

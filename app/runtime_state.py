@@ -14,6 +14,7 @@ class RuntimeState:
     graphics_logos_dir: str
     graphics_brand_dir: str
     graphics_client_dir: str
+    external_client_logo_dir: str
 
     clubal_icon_file: str
     client_logo_dirname: str
@@ -36,14 +37,17 @@ def build_runtime_state(ctx: Any) -> RuntimeState:
     graphics_client_dir = os.path.join(graphics_logos_dir, "client")
 
     clubal_icon_file = "CLUBAL_ICO.png"
-    client_logo_dirname = os.path.join("logos", "client")
+    client_logo_dirname = "logo_cliente"
     client_logo_fallback = "logo_sesi_default.png"
+
+    external_client_logo_dir = os.path.join(str(ctx.paths.data_dir), client_logo_dirname)
 
     configure_image_search_dirs([
         graphics_dir,
         graphics_logos_dir,
         graphics_brand_dir,
         graphics_client_dir,
+        external_client_logo_dir,
         os.path.join(graphics_dir, "weather", "icons"),
         os.path.join(graphics_dir, "weather", "bg"),
     ])
@@ -66,6 +70,7 @@ def build_runtime_state(ctx: Any) -> RuntimeState:
         graphics_logos_dir=graphics_logos_dir,
         graphics_brand_dir=graphics_brand_dir,
         graphics_client_dir=graphics_client_dir,
+        external_client_logo_dir=external_client_logo_dir,
         clubal_icon_file=clubal_icon_file,
         client_logo_dirname=client_logo_dirname,
         client_logo_fallback=client_logo_fallback,
